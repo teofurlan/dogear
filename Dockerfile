@@ -24,9 +24,9 @@ COPY --from=ollama /usr/bin/ollama /usr/bin/ollama
 COPY --from=ollama /usr/lib/ollama /usr/lib/ollama
 
 # Bake the model into the image so each nightly run does not download several GB.
-RUN ollama serve >/tmp/ollama.log 2>&1 & \
+RUN ollama serve >/tmp/ollama.log 2>&1 & pid=$!; \
     for i in $(seq 1 30); do curl -sf http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 1; done; \
-    ollama pull "${MODEL}" && kill %1
+    ollama pull "${MODEL}" && kill "$pid"
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 WORKDIR /app
@@ -34,6 +34,9 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev && rm -rf /root/.cache/uv
 
+# A synthetic photo of a highlighted Don Quijote page (public domain), so a cron run can
+# be smoke-tested before photos come from the API: `night-job /app/sample/page.jpg`.
+COPY docker/sample-page.jpg /app/sample/page.jpg
 COPY docker/night-job.sh /usr/local/bin/night-job
 RUN chmod +x /usr/local/bin/night-job
 ENTRYPOINT ["night-job"]
