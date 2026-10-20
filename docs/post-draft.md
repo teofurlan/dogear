@@ -44,7 +44,11 @@ In a phone photo, a highlighter barely changes the paper. Its color saturation m
 
 What worked was the Lab color space, which separates brightness from color. Instead of looking for any particular color, I compare each pixel with the paper's own tint on that photo: highlighted paper drifts away from it. That found **every highlighted block on both pages**, including one on the curled facing page.
 
-I use several highlighter colors, so the app must not care which one I picked. TODO: confirm the detection with more than one color.
+I use several highlighter colors, so the app must not care which one I picked. It measures *how far* a pixel drifts from the paper's tint, not *toward which color*. On synthetic pages, yellow, green, pink, blue and orange pens are all found. TODO: real photos with more than one color.
+
+The next trap was light. In one of my photos the bottom half of the page was in shadow, and the paper there had a slightly different tint than at the top. With a single reference tint, half the page stopped looking like paper. The fix was to fit the paper's tint as a smooth surface across the photo, ignoring outliers such as highlights, the hand and the table, and to measure every pixel against the tint *at its own position*.
+
+Two more details keep things honest. The page is the largest paper region with its holes filled, so text and highlights count as page, but a thumb entering from the edge never does, even when its color is close to an orange highlighter. And the facing page that curls up next to the one I photographed is ignored.
 
 TODO: before/after image of the color mask.
 
@@ -65,6 +69,17 @@ So the design flipped: **the model reads, the code decides.**
 2. **OCR gives the position of every word.** Tesseract returns a box for each word. A word counts as part of a quote when at least a quarter of the paper under its box carries highlighter. On my two test pages, this found the start and end of every highlighted passage on the flat page, down to the exact word, in about 5 seconds per page on a CPU. It even caught highlights that start in the middle of a line.
 3. **Two independent readers, compared.** OCR is great at *where* but sloppy at *what*: it misread letters inside words and scrambled a long passage near the column gutter. Gemma is the opposite: clean text, but it can skip words. So each highlighted block is read by both, and the model's version is kept only where the two agree.
 4. **Disagreement is flagged for me.** If Gemma drops words that OCR saw, or writes words OCR never saw, the quote reaches my morning review flagged, with the photo crop next to it. Flags only point my attention: every quote, flagged or not, stays mine to keep, edit or delete.
+
+### First full run
+
+On my two test pages, the pipeline found 3 of 3 highlighted passages on each page, with no false quotes. With Gemma on 4 CPU threads, a page took 40 to 75 seconds, including loading the model.
+
+Two of my first fixes came from watching the model fail:
+
+- **The crop shape matters.** At first I sent Gemma a crop where everything except the OCR word boxes was blanked. Where OCR got confused, those boxes had holes, and Gemma read fragments. Now the crop is shaped like a text selection: whole lines in the middle, and only the start of the first line and the end of the last line are blanked. With that change, Gemma read a long passage almost perfectly, including the clause it had dropped before.
+- **Agreement must forgive spacing.** OCR glues two short words into one or splits one word in two, and Gemma copies the line-break hyphens of the page. Comparing the letters of differing word runs, and rejoining hyphens where OCR saw a line break, removed the false alarms.
+
+After these fixes, 4 of the 6 quotes came out with both readings agreeing. The other 2 are flagged, and they are exactly the two passages where OCR scrambled the text near the column gutter. No wrong quote was presented as confident.
 
 ### Slow on purpose
 
@@ -107,3 +122,4 @@ TODO: confirm once each one is actually used.
 ## Changelog
 
 - 2026-10-20: First version. Idea, feasibility test with real photos, and the public repository.
+- 2026-10-20: The extraction pipeline runs end to end from the command line (any pen color, uneven light, two readers compared).
