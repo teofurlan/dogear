@@ -46,6 +46,16 @@ def test_the_request_is_deterministic_and_carries_the_crop_as_png():
     assert cv2.imdecode(np.frombuffer(image, np.uint8), cv2.IMREAD_COLOR).shape == CROP.shape
 
 
+def test_the_context_window_is_small_by_default():
+    # A crop prompt needs a few hundred tokens; the model's default context reserves
+    # gigabytes of memory for a cache that is never used.
+    transport = FakeTransport(chat_reply('{"text": "x"}'))
+
+    OllamaReader(transport=transport).read(CROP)
+
+    assert transport.calls[0][1]["options"]["num_ctx"] == 4096
+
+
 def test_gpu_use_is_left_to_ollama_by_default():
     transport = FakeTransport(chat_reply('{"text": "x"}'))
 

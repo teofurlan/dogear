@@ -1,0 +1,13 @@
+.git
+.venv
+.engram
+.atl
+.codegraph
+odd
+models
+tests
+docs
+data
+**/__pycache__
+.env
+.env.*
