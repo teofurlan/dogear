@@ -24,3 +24,6 @@ web/dist/
 # Local data
 data/
 models/
+
+# Local-only test photos (the user's books are not published)
+tests/fixtures/private/
