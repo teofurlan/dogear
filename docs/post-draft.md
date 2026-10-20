@@ -87,7 +87,7 @@ None of this needs to happen when I take the photo, so it doesn't. A nightly job
 
 On 4 CPU threads, Gemma takes about 25 seconds to load and 9 to 18 seconds per highlighted block, and on my laptop the model process showed about 4 GB in use. That's about a minute per page, so a heavy reading day of 30 pages takes roughly half an hour, finished long before I wake up.
 
-The model weights are baked into the Docker image, so a run never downloads them. On a Render cron instance with 4 CPUs and 8 GB, the first run pulled the image and started Ollama in about 4 minutes, then processed a sample page in about 2 minutes, model load included. That run cost about 2.5 cents. On Linux the picture changed: the model's weights live in the process's own memory, and the job peaked at about 7.4 GiB of the 8 GiB instance. It fits, but with little room to spare. TODO: the instance size I settled on.
+The model weights are baked into the Docker image, so a run never downloads them. On a Render cron instance with 4 CPUs and 8 GB, the first run pulled the image and started Ollama in about 4 minutes, then processed a sample page in about 2 minutes, model load included. That run cost about 2.5 cents. On Linux the picture changed: the model's weights live in the process's own memory, and the job peaked at about 7.4 GiB of the 8 GiB instance. It fits, but with little room to spare, so the job moved to a 16 GB instance. That costs about a cent more per night, a fair price for a night run that never runs out of memory.
 
 TODO: architecture diagram (phone PWA → Render web service → MongoDB Atlas → nightly Render cron → review → Notion).
 
