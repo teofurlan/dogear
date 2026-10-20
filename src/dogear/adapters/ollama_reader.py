@@ -34,10 +34,14 @@ class OllamaReader:
         timeout: float = 300.0,
         cpu_only: bool = False,
         threads: int | None = None,
+        context: int = 4096,
         transport: Transport = _http_post,
     ):
         self.model, self.url, self.timeout = model, url.rstrip("/"), timeout
-        self.options: dict[str, Any] = {"temperature": 0}
+        # A crop prompt needs a few hundred tokens. The model's default context window
+        # reserves gigabytes for a key-value cache that is never used, which matters on a
+        # CPU-only machine with a fixed memory limit.
+        self.options: dict[str, Any] = {"temperature": 0, "num_ctx": context}
         if cpu_only:
             self.options["num_gpu"] = 0
         if threads:
