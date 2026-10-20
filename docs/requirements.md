@@ -16,18 +16,17 @@ Deadline: 2026-10-25 23:59 PDT.
 
 Out of scope this week: ratings, reviews, goals, statistics, handwritten margin notes.
 
-## Pipeline (from the 2026-10-20 spike)
+## Pipeline (implemented locally on 2026-10-20, see README)
 
-1. Find the page region and ignore the hand, the background and the curled facing page.
-2. Highlight mask: each pixel's distance from the paper's own tint in Lab, independent of the highlighter color.
-3. OCR (Tesseract, `spa`, grayscale at 2x) returns word boxes. A word is highlighted when at least ~25% of the paper under its box is highlighted. Consecutive highlighted words form one passage, with small gaps merged.
-4. Gemma reads each highlighted crop. Its text is kept where it agrees with the OCR words, and any disagreement is flagged.
-5. The quotes go to the review queue.
+1. **Page region:** the largest paper surface, with its holes filled. A thumb or the background touching the edge is never inside it.
+2. **Highlight mask:** the Lab a/b distance from the paper's tint. The tint is fitted as a smooth quadratic surface across the photo, so uneven light does not shift the reference. Independent of the pen color.
+3. **OCR word boxes:** Tesseract, `spa`, grayscale at 2x. A word is highlighted when at least 25% of the paper under its box is. Gaps of up to 2 words are merged, runs of fewer than 3 words are dropped, and end-of-line hyphens are joined.
+4. **Two readers:** Gemma reads a crop that is blank except for the passage's own words. Its text is kept, and runs of 2 or more words it dropped or added compared with OCR flag the quote (`readings_disagree`). Without the model, or when it fails, the OCR text is used and flagged (`ocr_only` or `model_unavailable`).
+5. The quotes go to the review queue (not built yet).
 
-## Spike evidence (3 photos, a single highlighter color)
+## Evidence
 
-- The Lab tint shift found every highlighted block. **Only one color was tested.** The spike code also assumed that one color's direction and used a skin filter that would reject warm-colored highlighters. R3 requires replacing them with tint distance plus page-region detection, which is not yet tested.
-- Gemma 4 e4b on a full page cannot tell which text is highlighted. On crops it reads well but once skipped a clause.
-- OCR word boxes plus coverage give exact boundaries on the flat page, in about 5 s per page on CPU.
-- Gemma on CPU (4 threads): about 25 s to load, then 9-18 s per crop.
-- Not measured: RAM on Render, other highlighter colors, other books or lighting.
+- **Real photos (2 pages, one pen color, one with uneven light):** 3 of 3 highlighted passages were found on each flat page, with no false quotes and with correct word boundaries. OCR plus the mask take about 5 s per page on CPU. The curled facing page is ignored.
+- **Synthetic pages:** yellow, green, pink, blue and orange pens at 12% blend strength are all found (more than 80% of the tinted area), with no detection on plain paper, the hand or the background.
+- **Model:** Gemma 4 e4b on a full page cannot tell which text is highlighted. On crops it reads well but once skipped a clause. On CPU with 4 threads: about 25 s to load, then 9-18 s per crop.
+- **Not measured yet:** RAM on Render, real photos with other pen colors, other books and lighting.

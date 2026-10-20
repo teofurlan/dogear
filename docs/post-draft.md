@@ -44,7 +44,11 @@ In a phone photo, a highlighter barely changes the paper. Its color saturation m
 
 What worked was the Lab color space, which separates brightness from color. Instead of looking for any particular color, I compare each pixel with the paper's own tint on that photo: highlighted paper drifts away from it. That found **every highlighted block on both pages**, including one on the curled facing page.
 
-I use several highlighter colors, so the app must not care which one I picked. TODO: confirm the detection with more than one color.
+I use several highlighter colors, so the app must not care which one I picked. It measures *how far* a pixel drifts from the paper's tint, not *toward which color*. On synthetic pages, yellow, green, pink, blue and orange pens are all found. TODO: real photos with more than one color.
+
+The next trap was light. In one of my photos the bottom half of the page was in shadow, and the paper there had a slightly different tint than at the top. With a single reference tint, half the page stopped looking like paper. The fix was to fit the paper's tint as a smooth surface across the photo, ignoring outliers such as highlights, the hand and the table, and to measure every pixel against the tint *at its own position*.
+
+Two more details keep things honest. The page is the largest paper region with its holes filled, so text and highlights count as page, but a thumb entering from the edge never does, even when its color is close to an orange highlighter. And the facing page that curls up next to the one I photographed is ignored.
 
 TODO: before/after image of the color mask.
 
