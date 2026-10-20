@@ -38,7 +38,8 @@ RUN uv sync --frozen --no-dev && rm -rf /root/.cache/uv
 # A synthetic photo of a highlighted Don Quijote page (public domain), so a cron run can
 # be smoke-tested before photos come from the API: `night-job /app/sample/page.jpg`.
 COPY docker/sample-page.jpg /app/sample/page.jpg
+COPY docker/memory-sampler.sh /usr/local/bin/memory-sampler
 COPY docker/night-job.sh /usr/local/bin/night-job
-RUN chmod +x /usr/local/bin/night-job
+RUN chmod +x /usr/local/bin/memory-sampler /usr/local/bin/night-job
 # CMD, not ENTRYPOINT: a Render cron job with no Docker Command runs exactly this.
 CMD ["night-job", "/app/sample/page.jpg"]
