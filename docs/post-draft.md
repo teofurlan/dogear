@@ -85,7 +85,9 @@ After these fixes, 4 of the 6 quotes came out with both readings agreeing. The o
 
 None of this needs to happen when I take the photo, so it doesn't. A nightly job on Render processes the day's photos on a plain CPU, with no GPU.
 
-On 4 CPU threads, Gemma takes about 25 seconds to load and 9 to 18 seconds per highlighted block, and the model process peaks at about 4 GB of memory, which fits the largest Render cron instance (8 GB) with room to spare. TODO: confirm on Render itself. That's about a minute per page, so a heavy reading day of 30 pages takes roughly half an hour, finished long before I wake up.
+On 4 CPU threads, Gemma takes about 25 seconds to load and 9 to 18 seconds per highlighted block, and on my laptop the model process peaks at about 4 GB of memory. That's about a minute per page, so a heavy reading day of 30 pages takes roughly half an hour, finished long before I wake up.
+
+The model weights are baked into the Docker image, so a run never downloads them. On a Render cron instance with 4 CPUs and 8 GB, the first run pulled the image and started Ollama in about 4 minutes, then processed a sample page in about 2 minutes, model load included. That run cost about 2.5 cents. TODO: memory on Render, measured as the working set.
 
 TODO: architecture diagram (phone PWA → Render web service → MongoDB Atlas → nightly Render cron → review → Notion).
 
@@ -123,3 +125,4 @@ TODO: confirm once each one is actually used.
 
 - 2026-10-20: First version. Idea, feasibility test with real photos, and the public repository.
 - 2026-10-20: The extraction pipeline runs end to end from the command line (any pen color, uneven light, two readers compared).
+- 2026-10-20: The night job runs as a Render cron job on a plain CPU, with the model baked into the image.
