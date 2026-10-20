@@ -70,6 +70,17 @@ So the design flipped: **the model reads, the code decides.**
 3. **Two independent readers, compared.** OCR is great at *where* but sloppy at *what*: it misread letters inside words and scrambled a long passage near the column gutter. Gemma is the opposite: clean text, but it can skip words. So each highlighted block is read by both, and the model's version is kept only where the two agree.
 4. **Disagreement is flagged for me.** If Gemma drops words that OCR saw, or writes words OCR never saw, the quote reaches my morning review flagged, with the photo crop next to it. Flags only point my attention: every quote, flagged or not, stays mine to keep, edit or delete.
 
+### First full run
+
+On my two test pages, the pipeline found 3 of 3 highlighted passages on each page, with no false quotes. With Gemma on 4 CPU threads, a page took 40 to 75 seconds, including loading the model.
+
+Two of my first fixes came from watching the model fail:
+
+- **The crop shape matters.** At first I sent Gemma a crop where everything except the OCR word boxes was blanked. Where OCR got confused, those boxes had holes, and Gemma read fragments. Now the crop is shaped like a text selection: whole lines in the middle, and only the start of the first line and the end of the last line are blanked. With that change, Gemma read a long passage almost perfectly, including the clause it had dropped before.
+- **Agreement must forgive spacing.** OCR glues two short words into one or splits one word in two, and Gemma copies the line-break hyphens of the page. Comparing the letters of differing word runs, and rejoining hyphens where OCR saw a line break, removed the false alarms.
+
+After these fixes, 4 of the 6 quotes came out with both readings agreeing. The other 2 are flagged, and they are exactly the two passages where OCR scrambled the text near the column gutter. No wrong quote was presented as confident.
+
 ### Slow on purpose
 
 None of this needs to happen when I take the photo, so it doesn't. A nightly job on Render processes the day's photos on a plain CPU, with no GPU.
@@ -111,3 +122,4 @@ TODO: confirm once each one is actually used.
 ## Changelog
 
 - 2026-10-20: First version. Idea, feasibility test with real photos, and the public repository.
+- 2026-10-20: The extraction pipeline runs end to end from the command line (any pen color, uneven light, two readers compared).
