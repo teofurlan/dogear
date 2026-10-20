@@ -32,7 +32,7 @@ TODO: 60-second video of the full loop (photo while reading → night run → mo
 
 ## Code
 
-TODO: repository link.
+{% github teofurlan/dogear %}
 
 ## How I Built It
 
@@ -106,4 +106,4 @@ TODO: confirm once each one is actually used.
 
 ## Changelog
 
-- 2026-10-20: First version. Idea and the feasibility test with real photos.
+- 2026-10-20: First version. Idea, feasibility test with real photos, and the public repository.
