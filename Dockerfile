@@ -2,7 +2,8 @@
 # It runs on a plain CPU; Render cron jobs have no GPU.
 #
 #   docker build -t dogear-night .
-#   docker run --rm --memory 8g --cpus 4 -v "$PWD/photos:/data" dogear-night /data/*.jpg
+#   docker run --rm --memory 8g --cpus 4 dogear-night          # the baked sample page
+#   docker run --rm --memory 8g --cpus 4 -v "$PWD/photos:/data" dogear-night night-job /data/page.jpg
 
 ARG OLLAMA_VERSION=0.30.10
 ARG MODEL=gemma4:e4b
@@ -39,4 +40,5 @@ RUN uv sync --frozen --no-dev && rm -rf /root/.cache/uv
 COPY docker/sample-page.jpg /app/sample/page.jpg
 COPY docker/night-job.sh /usr/local/bin/night-job
 RUN chmod +x /usr/local/bin/night-job
-ENTRYPOINT ["night-job"]
+# CMD, not ENTRYPOINT: a Render cron job with no Docker Command runs exactly this.
+CMD ["night-job", "/app/sample/page.jpg"]
