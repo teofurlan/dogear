@@ -29,4 +29,6 @@ Out of scope this week: ratings, reviews, goals, statistics, handwritten margin 
 - **Real photos (2 pages, one pen color, one with uneven light):** 3 of 3 highlighted passages were found on each flat page, with no false quotes and with correct word boundaries. OCR plus the mask take about 5 s per page on CPU. The curled facing page is ignored.
 - **Synthetic pages:** yellow, green, pink, blue and orange pens at 12% blend strength are all found (more than 80% of the tinted area), with no detection on plain paper, the hand or the background.
 - **Model:** Gemma 4 e4b on a full page cannot tell which text is highlighted. On crops it reads well but once skipped a clause. On CPU with 4 threads: about 25 s to load, then 9-18 s per crop.
-- **Not measured yet:** RAM on Render, real photos with other pen colors, other books and lighting.
+- **Memory (Windows, CPU only, 4 threads):** the model process peaked at a 4.09 GB working set (8.25 GB of private commit that Windows reserves without touching). Pages took 54 to 84 s, model load included.
+- **Render constraints (render.com/docs/cronjobs):** cron jobs pull the image before every run, cannot use a persistent disk, and are stopped after 12 hours. A community answer cites a 10 GB image limit (unverified in the docs).
+- **Not measured yet:** RAM on Render itself (Linux), real photos with other pen colors, other books and lighting.

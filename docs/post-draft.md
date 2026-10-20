@@ -85,7 +85,7 @@ After these fixes, 4 of the 6 quotes came out with both readings agreeing. The o
 
 None of this needs to happen when I take the photo, so it doesn't. A nightly job on Render processes the day's photos on a plain CPU, with no GPU.
 
-On 4 CPU threads, Gemma takes about 25 seconds to load and 9 to 18 seconds per highlighted block. That's about a minute per page, so a heavy reading day of 30 pages takes roughly half an hour, finished long before I wake up.
+On 4 CPU threads, Gemma takes about 25 seconds to load and 9 to 18 seconds per highlighted block, and the model process peaks at about 4 GB of memory, which fits the largest Render cron instance (8 GB) with room to spare. TODO: confirm on Render itself. That's about a minute per page, so a heavy reading day of 30 pages takes roughly half an hour, finished long before I wake up.
 
 TODO: architecture diagram (phone PWA → Render web service → MongoDB Atlas → nightly Render cron → review → Notion).
 
