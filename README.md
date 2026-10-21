@@ -4,7 +4,7 @@ Photograph the pages you highlighted in a paper book. Overnight, a small open-we
 
 Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Steady](https://dev.to/devteam/join-the-hacktoberfest-open-source-ai-challenge-slow-and-steady-2850-in-prizes-across-21-3iee).
 
-**Status:** work in progress. The extraction pipeline runs locally from the command line; the app (API, phone PWA, review) is next.
+**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. The FastAPI foundation runs locally; authentication, data, the phone PWA and review are still pending.
 
 - [Requirements and feasibility evidence](docs/requirements.md)
 - [Build log (DEV post draft)](docs/post-draft.md)
@@ -36,6 +36,23 @@ uv run dogear-extract page.jpg --cpu-only --threads 4  # with Gemma on CPU
 | `DOGEAR_OLLAMA_URL` | `http://localhost:11434` | Ollama server |
 
 On Windows the installer ships only English; put `spa.traineddata` from [tessdata_best](https://github.com/tesseract-ocr/tessdata_best) in `models/tessdata/`.
+
+## Run the API locally
+
+```bash
+uv sync --locked
+uv run uvicorn dogear.entrypoints.api:create_app --factory --reload --host 127.0.0.1
+```
+
+Check `GET http://127.0.0.1:8000/health`: it returns `200` with `{"status":"ok"}`.
+Interactive documentation is at [localhost:8000/docs](http://127.0.0.1:8000/docs),
+and its OpenAPI schema is at `/openapi.json`.
+
+The app factory creates a separate HTTP entrypoint without loading OCR or Gemma.
+`/health` checks only that HTTP requests can be served: it does not check MongoDB,
+R2, Auth0 or the night job. No credentials are needed for this foundation, and no
+user-data endpoints exist yet. The API has not been deployed; the existing Docker
+image still runs the night job. `--reload` is for local development only.
 
 ## Tests
 

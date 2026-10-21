@@ -6,9 +6,11 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.13"
 dependencies = [
+    "fastapi>=0.156.8",
     "numpy>=2.2",
     "opencv-python-headless>=4.11",
     "pytesseract>=0.3.13",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
@@ -16,6 +18,7 @@ dogear-extract = "dogear.entrypoints.extract_cli:main"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.16.0",
     "pytest>=8",
 ]
 

@@ -91,6 +91,14 @@ The model weights are baked into the Docker image, so a run never downloads them
 
 TODO: architecture diagram (phone PWA → Render web service → MongoDB Atlas → nightly Render cron → review → Notion).
 
+### A small HTTP foundation, separate from the model
+
+The first FastAPI slice runs locally: a liveness endpoint, interactive API docs,
+and HTTP tests. Starting the app does not load OCR or Gemma. A healthy HTTP
+process does not prove that storage or authentication works; those integrations,
+along with the user-facing data endpoints, are still pending. The existing Docker
+image remains the night job, not an API deployment.
+
 ### Reading several books at once
 
 TODO: the shelf, the sticky "currently reading" book on the camera screen, the "still reading X?" prompt after a gap, and the nightly check that flags pages that don't match the chosen book.
@@ -126,3 +134,4 @@ TODO: confirm once each one is actually used.
 - 2026-10-20: First version. Idea, feasibility test with real photos, and the public repository.
 - 2026-10-20: The extraction pipeline runs end to end from the command line (any pen color, uneven light, two readers compared).
 - 2026-10-20: The night job runs as a Render cron job on a plain CPU, with the model baked into the image.
+- 2026-10-21: Added the local FastAPI foundation, with a liveness endpoint, interactive API documentation and HTTP tests. Authentication and data are next.
