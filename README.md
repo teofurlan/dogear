@@ -4,7 +4,7 @@ Photograph the pages you highlighted in a paper book. Overnight, a small open-we
 
 Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Steady](https://dev.to/devteam/join-the-hacktoberfest-open-source-ai-challenge-slow-and-steady-2850-in-prizes-across-21-3iee).
 
-**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. The FastAPI foundation runs locally; authentication, data, the phone PWA and review are still pending.
+**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation; data, the phone PWA and review are still pending. Live Auth0 integration has not been tested yet.
 
 - [Requirements and feasibility evidence](docs/requirements.md)
 - [Build log (DEV post draft)](docs/post-draft.md)
@@ -50,9 +50,37 @@ and its OpenAPI schema is at `/openapi.json`.
 
 The app factory creates a separate HTTP entrypoint without loading OCR or Gemma.
 `/health` checks only that HTTP requests can be served: it does not check MongoDB,
-R2, Auth0 or the night job. No credentials are needed for this foundation, and no
-user-data endpoints exist yet. The API has not been deployed; the existing Docker
+R2, Auth0 or the night job. No credentials are needed for this liveness route, and no
+persisted-user-data endpoints exist yet. The API has not been deployed; the existing Docker
 image still runs the night job. `--reload` is for local development only.
+
+### Protect an identity request with Auth0
+
+Copy `.env.example` to `.env`, set `DOGEAR_AUTH0_DOMAIN` to the tenant hostname
+(no scheme or path), and set `DOGEAR_AUTH0_AUDIENCE` to the API's exact identifier.
+These are public identifiers; no client secret or signing private key is needed.
+Load that file explicitly:
+
+```bash
+uv run --env-file .env uvicorn dogear.entrypoints.api:create_app --factory --reload --host 127.0.0.1
+```
+
+`GET /me` requires `Authorization: Bearer <access-token>`. It returns only the
+verified subject, for example `{"sub":"auth0|reader"}`, not a database profile.
+Validation uses fixed RS256, the configured issuer/audience, and required
+`exp`, `iss`, `aud`, `sub` claims. Missing, expired or invalid tokens return `401`
+with `WWW-Authenticate: Bearer`. Missing configuration or unavailable/malformed
+signing keys fail closed with `503`; `/health` remains public.
+
+Public signing keys are fetched from the configured tenant's HTTPS JWKS endpoint
+only when needed, with a 3-second request timeout and a 5-minute cache. Unknown
+key IDs can refresh the cache after a 30-second cooldown; a newly rotated key can
+be rejected during that cooldown. Blocking key retrieval runs in a worker thread.
+The token cannot select another issuer, key URL or algorithm.
+
+Tests use local RSA signatures and mocked JWKS transport: they do not contact Auth0.
+Browser login, token acquisition, permissions and persisted user isolation are
+separate pending work. Use an API access token, not an ID token.
 
 ## Tests
 

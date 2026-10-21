@@ -95,8 +95,11 @@ TODO: architecture diagram (phone PWA → Render web service → MongoDB Atlas �
 
 The first FastAPI slice runs locally: a liveness endpoint, interactive API docs,
 and HTTP tests. Starting the app does not load OCR or Gemma. A healthy HTTP
-process does not prove that storage or authentication works; those integrations,
-along with the user-facing data endpoints, are still pending. The existing Docker
+process does not prove that storage or authentication works. The next slice adds
+Auth0 access-token validation and a protected identity endpoint. Its tests sign
+real RSA tokens locally and replace only the public-key HTTP transport; invalid
+signatures, issuers, audiences and expired tokens are rejected. Live tenant testing,
+storage and user-facing data endpoints remain pending. The existing Docker
 image remains the night job, not an API deployment.
 
 ### Reading several books at once
@@ -135,3 +138,4 @@ TODO: confirm once each one is actually used.
 - 2026-10-20: The extraction pipeline runs end to end from the command line (any pen color, uneven light, two readers compared).
 - 2026-10-20: The night job runs as a Render cron job on a plain CPU, with the model baked into the image.
 - 2026-10-21: Added the local FastAPI foundation, with a liveness endpoint, interactive API documentation and HTTP tests. Authentication and data are next.
+- 2026-10-21: Added Auth0 API token validation and a protected identity endpoint, with offline RSA/JWKS tests. Live tenant integration and data remain pending.
