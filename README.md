@@ -4,7 +4,7 @@ Photograph the pages you highlighted in a paper book. Overnight, a small open-we
 
 Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Steady](https://dev.to/devteam/join-the-hacktoberfest-open-source-ai-challenge-slow-and-steady-2850-in-prizes-across-21-3iee).
 
-**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation; data, the phone PWA and review are still pending. Live Auth0 integration has not been tested yet.
+**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation and MongoDB-backed, owner-scoped book creation/listing. The phone PWA and review are still pending. Live Auth0 integration has not been tested yet.
 
 - [Requirements and feasibility evidence](docs/requirements.md)
 - [Build log (DEV post draft)](docs/post-draft.md)
@@ -50,8 +50,8 @@ and its OpenAPI schema is at `/openapi.json`.
 
 The app factory creates a separate HTTP entrypoint without loading OCR or Gemma.
 `/health` checks only that HTTP requests can be served: it does not check MongoDB,
-R2, Auth0 or the night job. No credentials are needed for this liveness route, and no
-persisted-user-data endpoints exist yet. The API has not been deployed; the existing Docker
+R2, Auth0 or the night job. No credentials are needed for this liveness route;
+credentials are needed for protected identity/book requests. The API has not been deployed; the existing Docker
 image still runs the night job. `--reload` is for local development only.
 
 ### Protect an identity request with Auth0
@@ -79,8 +79,55 @@ be rejected during that cooldown. Blocking key retrieval runs in a worker thread
 The token cannot select another issuer, key URL or algorithm.
 
 Tests use local RSA signatures and mocked JWKS transport: they do not contact Auth0.
-Browser login, token acquisition, permissions and persisted user isolation are
-separate pending work. Use an API access token, not an ID token.
+Browser login and token acquisition remain separate pending work. Use an API access
+token, not an ID token. Book ownership is enforced using the verified subject below;
+FGA and Token Vault integrations remain future work.
+
+### Create and list your books
+
+Set the four `DOGEAR_MONGODB_*` variables in the ignored local `.env`, using
+`.env.example` as a template. Do not overwrite an existing `.env` with the template.
+The URI must use `mongodb+srv://` without credentials. Put the database user's
+username and password in their separate variables; do not URI-encode that password.
+Atlas users authenticate against `admin`; `DOGEAR_MONGODB_DATABASE` selects the
+application database. Grant only `readWrite` on that database and allow only the
+application host's IP in Atlas. Never commit this file or paste tokens/passwords into logs.
+
+Both routes require the same Bearer access token as `/me`:
+
+| Route | Request | Result |
+|---|---|---|
+| `POST /books` | `{"title":"A quiet morning","author":"Ada Reed"}` | `201`, with `id`, `title`, `author` |
+| `GET /books` | Optional `limit` and `after` query parameters | `200`, an array containing only your books |
+
+Title is required; author may be omitted or `null`. Supplied strings are trimmed
+and must contain 1-300 characters. Extra input fields, including any owner or ID,
+are rejected with `422`. The server assigns ownership from the verified token's
+`sub`, never from a request field, and does not expose it in book responses.
+
+Listing defaults to 50 books, with a maximum `limit` of 100. Results use ascending
+MongoDB ID order. To continue, pass the last returned `id` as `after`, a 24-character
+hexadecimal ID. An empty array ends the traversal. This is not a snapshot across
+concurrent inserts. There are no edit/delete, cover/ISBN lookup or reading-state
+operations in this slice.
+
+Incomplete MongoDB configuration and driver failures return a generic `503` without
+database/credential details. A failed write can have an unknown outcome; this API
+does not yet offer an idempotency key. Health/docs and identity remain independent
+of MongoDB availability. The synchronous SDK runs in worker-thread handlers; its
+client is created lazily for an authenticated book request, reused within the app,
+and closed at shutdown. Operations have a 5-second driver timeout, with 3-second
+server-selection/connection limits; no TLS verification bypass is enabled.
+
+HTTP tests keep real JWT verification and replace only JWKS and MongoDB transports.
+They cover per-user isolation, rejected input, pagination, failure behavior and
+connection lifecycle. They do not prove a live Auth0 tenant login. The cron Docker
+image remains separate from this local API.
+
+A local HTTP smoke check also created and listed two clearly marked synthetic
+books in Atlas, using local RSA/JWKS test identities. Those records were retained
+for explicit cleanup; no existing records were changed or deleted. This checks
+MongoDB persistence, not the real Auth0 login or PWA flow.
 
 ## Tests
 

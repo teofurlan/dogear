@@ -98,8 +98,13 @@ and HTTP tests. Starting the app does not load OCR or Gemma. A healthy HTTP
 process does not prove that storage or authentication works. The next slice adds
 Auth0 access-token validation and a protected identity endpoint. Its tests sign
 real RSA tokens locally and replace only the public-key HTTP transport; invalid
-signatures, issuers, audiences and expired tokens are rejected. Live tenant testing,
-storage and user-facing data endpoints remain pending. The existing Docker
+signatures, issuers, audiences and expired tokens are rejected. Browser login and
+the live tenant flow remain pending. The first data slice adds
+MongoDB-backed book creation/listing, with a required title and optional author.
+Every write and query uses the verified token subject as its owner, and HTTP tests
+check that one reader cannot see another reader's books. A local HTTP smoke test also
+created and retrieved two marked synthetic books in Atlas using local JWT/JWKS
+test identities; this is not a live Auth0 login or phone-to-server test. The existing Docker
 image remains the night job, not an API deployment.
 
 ### Reading several books at once
@@ -139,3 +144,4 @@ TODO: confirm once each one is actually used.
 - 2026-10-20: The night job runs as a Render cron job on a plain CPU, with the model baked into the image.
 - 2026-10-21: Added the local FastAPI foundation, with a liveness endpoint, interactive API documentation and HTTP tests. Authentication and data are next.
 - 2026-10-21: Added Auth0 API token validation and a protected identity endpoint, with offline RSA/JWKS tests. Live tenant integration and data remain pending.
+- 2026-10-21: Added owner-scoped MongoDB book creation/listing and HTTP isolation tests; the PWA, cover/ISBN lookup and photo storage remain pending.
