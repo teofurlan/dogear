@@ -34,7 +34,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN uv sync --frozen --no-dev && rm -rf /root/.cache/uv
+RUN uv sync --frozen --no-dev --extra observability && rm -rf /root/.cache/uv
 
 # A synthetic photo of a highlighted Don Quijote page (public domain), so a cron run can
 # be smoke-tested without any storage: `night-job /app/sample/page.jpg`.

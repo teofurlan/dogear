@@ -106,6 +106,7 @@ All variables go in the ignored `.env` locally, or in the Render dashboard when 
 | `DOGEAR_TESSERACT_CMD` | OCR | Tesseract binary; defaults to `tesseract` on PATH, or the Windows installer path |
 | `DOGEAR_TESSDATA` | OCR | Language data; defaults to `./models/tessdata` when it has `spa.traineddata` |
 | `DOGEAR_OLLAMA_URL` | Night job, extract CLI | Ollama server, default `http://localhost:11434` |
+| `DOGEAR_SENTRY_DSN` | Extract CLI (optional) | Enables content-free Sentry tracing; needs the `observability` extra, see [docs/observability.md](docs/observability.md) |
 | `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE` | Web build | Public Auth0 identifiers embedded in the bundle |
 
 Auth0 values are public identifiers: no client secret or signing key is needed. In Atlas, grant the database user only `readWrite` on the application database and allow only the hosts that run the API and the night job.
