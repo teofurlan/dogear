@@ -4,7 +4,7 @@ Photograph the pages you highlighted in a paper book. Overnight, a small open-we
 
 Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Steady](https://dev.to/devteam/join-the-hacktoberfest-open-source-ai-challenge-slow-and-steady-2850-in-prizes-across-21-3iee).
 
-**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation and MongoDB-backed, owner-scoped book creation/listing. The phone PWA and review are still pending. Live Auth0 integration has not been tested yet.
+**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation and MongoDB-backed, owner-scoped book creation/listing. The React/Vite library uses the selected Small-press catalog design, Auth0 sign-in and representative covers. The real local browser login, callback and authenticated book-list request have passed; the current account correctly shows an empty library. Installable/offline PWA behavior, phone capture and quote review remain pending. See [web setup and boundaries](web/README.md).
 
 - [Requirements and feasibility evidence](docs/requirements.md)
 - [Build log (DEV post draft)](docs/post-draft.md)
@@ -79,8 +79,8 @@ be rejected during that cooldown. Blocking key retrieval runs in a worker thread
 The token cannot select another issuer, key URL or algorithm.
 
 Tests use local RSA signatures and mocked JWKS transport: they do not contact Auth0.
-Browser login and token acquisition remain separate pending work. Use an API access
-token, not an ID token. Book ownership is enforced using the verified subject below;
+The web interface uses the Auth0 React SDK for browser login and access-token
+acquisition. Use an API access token, not an ID token. Book ownership is enforced using the verified subject below;
 FGA and Token Vault integrations remain future work.
 
 ### Create and list your books

@@ -98,14 +98,31 @@ and HTTP tests. Starting the app does not load OCR or Gemma. A healthy HTTP
 process does not prove that storage or authentication works. The next slice adds
 Auth0 access-token validation and a protected identity endpoint. Its tests sign
 real RSA tokens locally and replace only the public-key HTTP transport; invalid
-signatures, issuers, audiences and expired tokens are rejected. Browser login and
-the live tenant flow remain pending. The first data slice adds
+signatures, issuers, audiences and expired tokens are rejected. The first data slice adds
 MongoDB-backed book creation/listing, with a required title and optional author.
 Every write and query uses the verified token subject as its owner, and HTTP tests
 check that one reader cannot see another reader's books. A local HTTP smoke test also
 created and retrieved two marked synthetic books in Atlas using local JWT/JWKS
 test identities; this is not a live Auth0 login or phone-to-server test. The existing Docker
 image remains the night job, not an API deployment.
+
+### A first library, without pretending the rest is ready
+
+The mobile-first React interface now signs in through the Auth0 SDK and lists the
+reader's own books through the existing API. I compared two interactive visual
+directions and chose Small-press catalog: condensed headings, compact cover cells,
+thin rules and restrained red on a cool neutral ground. Representative covers
+come from Open Library using title and author; missing or ambiguous matches keep
+a neutral placeholder, never a guessed edition claim.
+
+The real local browser flow completed consent, returned to a clean callback URL
+and fetched the authenticated library successfully. That account has no books, so
+the app shows an honest empty state instead of inserting examples. Fourteen
+frontend tests and a production build pass; independent backend verification
+reports 107 passes and two existing platform skips. Populated visual examples
+remain mocks, not proof of populated live-account rendering. Camera capture,
+book-entry controls, reading status, offline installation and quote review are
+still future work.
 
 ### Reading several books at once
 
@@ -145,3 +162,4 @@ TODO: confirm once each one is actually used.
 - 2026-10-21: Added the local FastAPI foundation, with a liveness endpoint, interactive API documentation and HTTP tests. Authentication and data are next.
 - 2026-10-21: Added Auth0 API token validation and a protected identity endpoint, with offline RSA/JWKS tests. Live tenant integration and data remain pending.
 - 2026-10-21: Added owner-scoped MongoDB book creation/listing and HTTP isolation tests; the PWA, cover/ISBN lookup and photo storage remain pending.
+- 2026-10-21: Added the Small-press catalog library with real local Auth0 login, owner-scoped listing and representative cover fallback; installable/offline behavior, ISBN lookup and photo capture remain pending.
