@@ -14,6 +14,11 @@ dependencies = [
 [project.scripts]
 dogear-extract = "dogear.entrypoints.extract_cli:main"
 
+[project.optional-dependencies]
+observability = [
+    "sentry-sdk>=2.72,<3",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
