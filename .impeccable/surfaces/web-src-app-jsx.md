@@ -7,7 +7,7 @@ related_targets: ["web/src/styles.css"]
 
 # Dogear library
 
-Mode: operate. Chosen by the user after comparing interactive mocks. Scope: S17/S18/S20 in odd/tasks/dogear-mvp.md. React/Vite app uses existing Auth0 identity and owner-scoped book listing. Reading states, camera, uploads and book creation/editing controls are out of scope.
+Mode: operate. Chosen by the user after comparing interactive mocks. Scope: S17/S18/S20 in odd/tasks/dogear-mvp.md. React/Vite app uses existing Auth0 identity and owner-scoped book listing. S21 extends the library with inline manual book entry and transient cover-photo OCR suggestions followed by explicit confirmation. Reading states, page-photo uploads, existing-book editing and quote review remain out of scope.
 
 ## Direction contract
 

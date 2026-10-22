@@ -9,6 +9,23 @@ Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Stea
 - [Requirements and feasibility evidence](docs/requirements.md)
 - [Build log (DEV post draft)](docs/post-draft.md)
 
+## Add books from a cover
+
+The local library supports manual book entry and JPEG/PNG cover-photo suggestions.
+Review and correct the proposed title/author, then explicitly save the book. OCR is
+not catalog verification; unreadable covers still allow manual entry. Photos are
+transient and are not stored as book covers. No cloud resources are changed.
+
+`POST /books/identify` requires the same Bearer token as `/books`. Send raw
+`image/jpeg` or `image/png` bytes, not multipart or JSON. It returns
+`{"title":"...","author":null,"text":"..."}` without creating a book.
+Limits: 6 MiB, 20 megapixels, 10,000 pixels per side, a 10-second upload deadline,
+15-second OCR deadline and two readers per API process. Errors: `401` authentication,
+`408` upload deadline, `413` size, `415` format, `422` unreadable image,
+`429` busy readers, `503` unavailable auth/OCR. Details remain editable on failure.
+Install Tesseract with Spanish data as described below; recognition needs no Ollama
+or external book-catalog service. The API is still not deployed.
+
 ## How extraction works
 
 The model reads; the code decides.

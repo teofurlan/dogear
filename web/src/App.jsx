@@ -1,7 +1,8 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useAuth0} from '@auth0/auth0-react';
 import {listBooks, PAGE_SIZE} from './books.js';
 import {loadCovers} from './covers.js';
+import BookEntry from './BookEntry.jsx';
 
 function Cover({book, url}) {
   const [failed, setFailed] = useState(false);
@@ -13,6 +14,9 @@ function Cover({book, url}) {
 
 function Library({getToken, signIn}) {
   const [books, setBooks] = useState([]);
+  const [addedBooks, setAddedBooks] = useState([]);
+  // Newly saved books must not move the server pagination cursor past unseen books.
+  const visibleBooks = useMemo(() => [...new Map([...books, ...addedBooks].map(book => [book.id, book])).values()], [books, addedBooks]);
   const [covers, setCovers] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
@@ -38,14 +42,14 @@ function Library({getToken, signIn}) {
 
   useEffect(() => {
     const controller = new AbortController();
-    const missing = books.filter(book => !coverCache.current.has(book.id));
+    const missing = visibleBooks.filter(book => !coverCache.current.has(book.id));
     loadCovers(missing, (id, cover) => {
       if (controller.signal.aborted) return;
       coverCache.current.set(id, cover);
       setCovers(previous => ({...previous, [id]: cover}));
     }, controller.signal);
     return () => controller.abort();
-  }, [books]);
+  }, [visibleBooks]);
 
   async function more() {
     if (busy.current || !hasMore) return;
@@ -63,12 +67,13 @@ function Library({getToken, signIn}) {
   }
 
   return <>
-    <div className="heading-row"><h1>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{books.length} {books.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
+    <div className="heading-row"><h1>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
     <p className="intro-copy">A shelf of books worth finding again.</p>
+    {status !== 'loading' ? <BookEntry getToken={getToken} onCreated={book => setAddedBooks(previous => [...previous, book])} /> : null}
     {status === 'loading' ? <><p role="status" className="feedback">Loading your library…</p><ul className="book-grid skeleton-grid" aria-hidden="true">{[0,1,2,3].map(index => <li key={index} className="book skeleton"><div className="cover-wrap" /><div className="book-copy" /></li>)}</ul></> : null}
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
-    {status === 'ready' && !books.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Books you save will appear here with their title, author and cover.</p><p>Adding books is not available in this version.</p></section> : null}
-    {books.length ? <ul className="book-grid" aria-label="Books in your library">{books.map(book => <li key={book.id} className="book"><Cover book={book} url={covers[book.id]} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></li>)}</ul> : null}
+    {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
+    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><Cover book={book} url={covers[book.id]} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></li>)}</ul> : null}
     {hasMore && !error ? <button className="load-more" disabled={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
   </>;
 }

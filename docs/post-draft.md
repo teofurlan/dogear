@@ -163,3 +163,5 @@ TODO: confirm once each one is actually used.
 - 2026-10-21: Added Auth0 API token validation and a protected identity endpoint, with offline RSA/JWKS tests. Live tenant integration and data remain pending.
 - 2026-10-21: Added owner-scoped MongoDB book creation/listing and HTTP isolation tests; the PWA, cover/ISBN lookup and photo storage remain pending.
 - 2026-10-21: Added the Small-press catalog library with real local Auth0 login, owner-scoped listing and representative cover fallback; installable/offline behavior, ISBN lookup and photo capture remain pending.
+
+- 2026-10-22: Added manual book entry and transient cover-photo OCR suggestions with editable confirmation before saving. Cover reading is bounded and local; no photo is persisted and failures retain manual entry. Browser automation could not attach in this session; new visual proof is pending.

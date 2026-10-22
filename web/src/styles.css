@@ -22,6 +22,24 @@ img { display: block; max-width: 100%; }
   --catalog-gutter: clamp(1rem, 4vw, 3.25rem);
 }
 
+.book-entry { margin-block: 1.5rem 2rem; }
+.book-entry button { min-height: 48px; padding: .65rem 1rem; border: 1px solid var(--catalog-ink); background: var(--catalog-red); color: #fff; font-weight: 600; }
+.book-entry button:hover:not(:disabled) { background: color-mix(in srgb, var(--catalog-red) 90%, var(--catalog-ink)); }
+.book-entry button:active:not(:disabled) { background: color-mix(in srgb, var(--catalog-red) 75%, var(--catalog-ink)); }
+.book-entry form { max-width: 38rem; margin-top: 1.25rem; padding-block: 1.5rem; border-block: 1px solid var(--catalog-rule); }
+.book-entry h2 { margin: 0; font-family: var(--catalog-display); font-size: 1.7rem; }
+.book-entry label { display: block; margin-top: 1.25rem; margin-bottom: .4rem; font-weight: 600; }
+.book-entry input { display: block; width: 100%; min-width: 0; min-height: 48px; border: 1px solid var(--catalog-rule); border-radius: 0; padding: .65rem; font: inherit; color: var(--catalog-ink); background: var(--catalog-paper); caret-color: var(--catalog-red); }
+.book-entry input:focus-visible, .book-entry summary:focus-visible { outline: 3px solid var(--catalog-red); outline-offset: 4px; }
+.book-entry input:disabled { opacity: .65; }
+.book-entry input[type="file"] { padding: .5rem; }
+.book-entry input::file-selector-button { min-height: 32px; margin-right: .75rem; border: 1px solid var(--catalog-ink); padding: .25rem .5rem; font: inherit; background: var(--catalog-paper); color: var(--catalog-ink); cursor: pointer; }
+.field-help { font-size: .85rem; color: var(--catalog-muted); font-weight: 400; }
+.entry-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1.5rem; }
+.book-entry .cancel-button { border: 0; background: transparent; color: var(--catalog-ink); text-decoration: underline; text-underline-offset: .3em; }
+.book-entry summary { cursor: pointer; min-height: 44px; padding-block: .5rem; text-decoration: underline; text-underline-offset: .3em; }
+.detected-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
 html {
   background: var(--catalog-paper);
   color: var(--catalog-ink);

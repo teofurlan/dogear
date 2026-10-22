@@ -1,9 +1,11 @@
 """HTTP entrypoint. Extraction stays in the separate CLI and night job."""
 
+import asyncio
 from contextlib import asynccontextmanager
+from threading import BoundedSemaphore
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Security
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
@@ -15,6 +17,7 @@ from dogear.adapters.auth0_jwt import (
     InvalidAccessToken,
 )
 from dogear.adapters.mongo_books import BooksUnavailable, MongoBooks, MongoConfig
+from dogear.application.identify import MAX_BYTES, CoverError, identify_cover
 
 
 class BookInput(BaseModel):
@@ -25,6 +28,12 @@ class BookInput(BaseModel):
 
 class Book(BookInput):
     id: str
+
+
+class CoverSuggestion(BaseModel):
+    title: str
+    author: str | None
+    text: str
 
 
 BOOK_ERRORS = {
@@ -52,6 +61,7 @@ def create_app() -> FastAPI:
                 await run_in_threadpool(books.close)
 
     app = FastAPI(title="Dogear API", lifespan=lifespan)
+    cover_slots = BoundedSemaphore(2)
     app.add_api_route("/health", health, methods=["GET"], tags=["health"])
     config = Auth0Config.from_environment()
     verifier = Auth0TokenVerifier(config) if config else None
@@ -92,6 +102,55 @@ def create_app() -> FastAPI:
         if books is None:
             raise HTTPException(503, "Book storage unavailable")
         return books
+
+    @app.post(
+        "/books/identify",
+        response_model=CoverSuggestion,
+        tags=["books"],
+        responses={
+            **BOOK_ERRORS,
+            413: {"description": "Photo too large"},
+            415: {"description": "Unsupported image format"},
+            422: {"description": "Unreadable photo"},
+            429: {"description": "Cover readers busy"},
+        },
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {
+                    kind: {"schema": {"type": "string", "format": "binary"}}
+                    for kind in ("image/jpeg", "image/png")
+                },
+            }
+        },
+    )
+    async def identify_book(
+        request: Request, subject: Annotated[str, Depends(current_subject)]
+    ):
+        """Read a transient cover (6 MiB/20 MP); review suggestions before POST /books."""
+        if request.headers.get("content-type", "").split(";")[0] not in {
+            "image/jpeg",
+            "image/png",
+        }:
+            raise HTTPException(415, "Choose a JPEG or PNG cover photo")
+        if not cover_slots.acquire(blocking=False):
+            raise HTTPException(429, "Cover readers are busy; try again shortly")
+        try:
+            data = bytearray()
+            async with asyncio.timeout(10):
+                async for chunk in request.stream():
+                    if len(data) + len(chunk) > MAX_BYTES:
+                        raise HTTPException(413, "Use a photo smaller than 6 MiB")
+                    data.extend(chunk)
+            if not data:
+                raise HTTPException(422, "Choose a non-empty cover photo")
+            return await run_in_threadpool(identify_cover, bytes(data))
+        except CoverError as error:
+            raise HTTPException(error.status, error.message) from None
+        except TimeoutError:
+            raise HTTPException(408, "Photo upload timed out") from None
+        finally:
+            cover_slots.release()
 
     @app.post(
         "/books",

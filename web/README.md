@@ -27,6 +27,21 @@ The dev server is loopback-only and refuses another port when 5173 is occupied. 
 - Each account gets a fresh library component. Pending book/cover requests are cancelled when that account leaves. No books or account data are stored in persistent browser storage.
 - Lists load 24 books at a time; “Load more books” continues from the last returned ID. Empty libraries remain empty: no demo entries are inserted.
 
+## Add a book
+
+Sign in, choose **Add book**, enter a title and optional author, then **Save book**.
+Alternatively choose **Cover photo** to take/select a JPEG or PNG (up to 6 MiB,
+20 megapixels). Local Tesseract OCR suggests title/author from text size and layout;
+it is not a verified catalog identity and may mistake subtitles/publishers for an author.
+Review/edit both fields before saving. Unreadable or unavailable OCR never blocks manual entry.
+
+The photo is transient: it goes only to the authenticated local `/api/books/identify`
+endpoint, not to Open Library, MongoDB or object storage. Saving uses the existing
+owner-scoped API. Displayed covers still follow the representative-cover lookup below.
+JPEG/PNG only: export HEIC/AVIF first. Cancel discards suggestions; switching accounts
+aborts pending work. A failed save can have an uncertain outcome: refresh the library
+before retrying rather than automatically repeating a write.
+
 ## Representative covers
 
 Cover search sends only each book's title and optional author to Open Library, not tokens, user IDs or the rest of a book record. The anonymous search queue allows at most one request every 1.1 seconds and bounds each request to four seconds. Cover results are cached only within the mounted account library. Book listing does not wait for covers.
@@ -46,4 +61,4 @@ The tests replace Auth0 hooks and transport calls to check rendering, login/logo
 
 A separate live check completed Auth0 consent, returned to a clean local URL and received `200` from the authenticated book-list endpoint. The actual account had zero books; no demonstration records were inserted. Desktop/mobile screenshots cover the real empty and signed-out states. Populated visual examples are mock references, not evidence of a populated live account. Fourteen frontend tests and a production build pass; independent backend verification reports 107 passes and two existing platform skips.
 
-The interface intentionally has no camera/upload, reading state, book creation/edit/delete, installable/offline caching or quote-review controls. The separate local comparison demos under `.impeccable/previews` use fixtures and never supply data to this app. Self-hosted Public Sans and Barlow Condensed font files include their OFL notices in `public/fonts/`.
+The interface intentionally has no page-photo upload, reading state, existing-book edit/delete, installable/offline caching or quote-review controls. The separate local comparison demos under `.impeccable/previews` use fixtures and never supply data to this app. Self-hosted Public Sans and Barlow Condensed font files include their OFL notices in `public/fonts/`.

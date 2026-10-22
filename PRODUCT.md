@@ -30,9 +30,9 @@ The eventual workflow is capture on a phone, scheduled processing on Render, the
 
 - Implemented: extraction CLI, a measured Render cron run, a local FastAPI identity endpoint and owner-scoped MongoDB book creation/listing.
 - Verified: real Auth0 browser login through the React SDK, a clean callback and an authenticated local API book-list response. The account is empty; populated production rendering and live cover matching for that account remain unverified. A deployed API and a production PWA are not verified.
-- Current interface scope: login and a library showing title, optional author and a cover from the start.
+- Current interface scope: login, an owner-scoped library with representative covers, and manual or cover-photo-assisted book entry with explicit confirmation.
 - Covers: a representative Open Library cover found from title and author is acceptable for now; it need not match the reader's exact edition. Use a neutral fallback when no reliable match is available.
-- Reading status, camera, uploads, photo/quote persistence and review are outside this interface slice. The slice does not add book creation or editing controls.
+- Book entry now supports manual title/optional author and transient JPEG/PNG cover OCR suggestions. Suggestions are fallible, editable and require explicit save; the photo is not stored or used as the displayed cover. Reading status, page-photo uploads/persistence, editing existing books and quote review remain separate work.
 - Existing health, identity, ownership and extraction behavior must remain intact. Tokens and private configuration must not appear in public artifacts, logs or demonstration data.
 - English is the default for interface copy and repository artifacts. This is a project convention, not a new language preference inferred from the conversation.
 
