@@ -60,6 +60,25 @@ def test_invalid_uploads_do_not_reach_ocr(auth, monkeypatch, kind, data, status)
     assert response.status_code == status
 
 
+def test_declared_oversize_is_rejected_before_reading_the_body(auth, monkeypatch):
+    client, issue, _, _ = auth
+
+    def unexpected(_data):
+        pytest.fail("oversized upload reached OCR")
+
+    monkeypatch.setattr(api, "identify_cover", unexpected, raising=False)
+    response = client.post(
+        "/books/identify",
+        content=b"x",
+        headers={
+            "Authorization": f"Bearer {issue()}",
+            "Content-Type": "image/png",
+            "Content-Length": str(6 * 1024 * 1024 + 1),
+        },
+    )
+    assert response.status_code == 413
+
+
 def test_reader_errors_are_safe_and_release_capacity(auth, monkeypatch):
     from dogear.application.identify import CoverError
 

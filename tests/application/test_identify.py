@@ -67,6 +67,22 @@ def test_ocr_uses_bounded_subprocess_without_global_tesseract_mutation(monkeypat
     assert identify_cover(photo())["title"] == "Synthetic title"
 
 
+def test_ocr_subprocess_does_not_inherit_service_secrets(monkeypatch):
+    monkeypatch.setenv("DOGEAR_MONGODB_PASSWORD", "private-value")
+    monkeypatch.setenv("AUTH0_CLIENT_SECRET", "private-value")
+    seen = {}
+
+    def run(command, **options):
+        seen.update(options["env"])
+        return SimpleNamespace(stdout=tsv().encode())
+
+    monkeypatch.setattr(subprocess, "run", run)
+    identify_cover(photo())
+    assert "private-value" not in seen.values()
+    assert seen["OMP_THREAD_LIMIT"] == "2"
+    assert "PATH" in seen
+
+
 @pytest.mark.parametrize(
     "data,status",
     [(b"not an image", 422), (photo((5000, 4100)), 413)],
