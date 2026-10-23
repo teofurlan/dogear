@@ -4,14 +4,9 @@ import {listBooks, PAGE_SIZE} from './books.js';
 import {loadCovers} from './covers.js';
 import {chooseExampleBooks} from './example-books.js';
 import BookEntry from './BookEntry.jsx';
-
-function Cover({book, url}) {
-  const [failed, setFailed] = useState(false);
-  return <div className="cover-wrap">
-    <div className="cover-fallback" aria-hidden="true"><span className="fallback-title">{book.title}</span><span className="fallback-author">No cover available</span></div>
-    {url && !failed ? <img className="cover-image" src={url} alt={`Representative cover of ${book.title}`} width="200" height="300" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : null}
-  </div>;
-}
+import BookCover from './BookCover.jsx';
+import BookView from './BookView.jsx';
+import {listQuotes} from './quotes.js';
 
 function ExampleGallery() {
   const [familiarBooks] = useState(() => chooseExampleBooks());
@@ -22,14 +17,46 @@ function ExampleGallery() {
     </div>
     <ul className="book-grid" aria-label="Example book covers">
       {familiarBooks.map(book => <li className="book" key={book.coverId}>
-        <Cover book={book} url={`https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg?default=false`} />
+        <BookCover book={book} url={`https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg?default=false`} />
         <div className="book-copy"><h3 className="book-title">{book.title}</h3><p className="book-author">{book.author}</p></div>
       </li>)}
     </ul>
   </section>;
 }
 
+const readHash = () => /^#book=([a-f0-9]{24})$/i.exec(window.location.hash)?.[1] || null;
+
 function Library({getToken, signIn}) {
+  const [bookId, setBookId] = useState(readHash);
+  const [waiting, setWaiting] = useState([]);
+  const pushed = useRef(false);
+  const heading = useRef(null);
+  useEffect(() => {
+    const sync = () => setBookId(readHash());
+    window.addEventListener('popstate', sync); window.addEventListener('hashchange', sync);
+    return () => {window.removeEventListener('popstate', sync); window.removeEventListener('hashchange', sync);};
+  }, []);
+  function openBook(id) {
+    window.history.pushState(null, '', '#book=' + id); pushed.current = true; setBookId(id);
+  }
+  function closeBook() {
+    if (pushed.current) {pushed.current = false; window.history.back();}
+    else {window.history.replaceState(null, '', window.location.pathname + window.location.search); setBookId(null);}
+  }
+  useEffect(() => {
+    if (bookId) return undefined;
+    const controller = new AbortController();
+    listQuotes(getToken, {status: 'pending'}, {signal: controller.signal})
+      .then(quotes => {if (!controller.signal.aborted && Array.isArray(quotes)) setWaiting(quotes);})
+      .catch(() => {});
+    return () => controller.abort();
+  }, [getToken, bookId]);
+  const wasOpen = useRef(Boolean(bookId));
+  useEffect(() => {
+    if (!bookId && wasOpen.current) heading.current?.focus();
+    wasOpen.current = Boolean(bookId);
+  }, [bookId]);
+
   const [books, setBooks] = useState([]);
   const [addedBooks, setAddedBooks] = useState([]);
   // Newly saved books must not move the server pagination cursor past unseen books.
@@ -83,14 +110,20 @@ function Library({getToken, signIn}) {
     } finally {if (!controller.signal.aborted) busy.current = false;}
   }
 
+  const openBookData = bookId ? visibleBooks.find(item => item.id === bookId) || {id: bookId, title: 'This book', author: null} : null;
+  if (bookId && status === 'loading') return <p role="status" className="feedback">Loading your library…</p>;
+  if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} />;
+  const waitingBook = waiting.length ? visibleBooks.find(item => item.id === waiting[0].book_id) : null;
+
   return <>
-    <div className="heading-row"><h1>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
+    <div className="heading-row"><h1 ref={heading} tabIndex={-1}>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
     <p className="intro-copy">A shelf of books worth finding again.</p>
+    {waiting.length ? <section className="review-banner" aria-label="Quotes to review"><p>{waiting.length} {waiting.length === 1 ? 'quote is' : 'quotes are'} waiting for review.</p><a href={'#book=' + waiting[0].book_id} onClick={event => {event.preventDefault(); openBook(waiting[0].book_id);}}>Review{waitingBook ? ` “${waitingBook.title}”` : ''}</a></section> : null}
     {status !== 'loading' ? <BookEntry getToken={getToken} onCreated={book => setAddedBooks(previous => [...previous, book])} /> : null}
     {status === 'loading' ? <><p role="status" className="feedback">Loading your library…</p><ul className="book-grid skeleton-grid" aria-hidden="true">{[0,1,2,3].map(index => <li key={index} className="book skeleton"><div className="cover-wrap" /><div className="book-copy" /></li>)}</ul></> : null}
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
     {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
-    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><Cover book={book} url={covers[book.id]} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></li>)}</ul> : null}
+    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><a className="book-link" href={'#book=' + book.id} onClick={event => {event.preventDefault(); openBook(book.id);}}><BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></a></li>)}</ul> : null}
     {hasMore && !error ? <button className="load-more" disabled={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
   </>;
 }
@@ -117,7 +150,7 @@ export default function App() {
           <div className="login-copy">
             <h2>Keep the lines worth keeping.</h2>
             <p>One home for your books and favorite quotes. Photograph your highlighted pages—no copying, no retyping.</p>
-            <p className="login-availability">Photo-to-quote capture is coming next. Sign in to view your library today.</p>
+            <p className="login-availability">Snap a page while you read. A small open model types the highlights overnight; you review them in the morning.</p>
             {error ? <p role="alert">Sign-in could not finish. Try again to start a new session.</p> : null}
           </div>
           <button onClick={signIn} disabled={starting}>{starting ? 'Opening sign-in…' : 'Sign in to library'}</button>

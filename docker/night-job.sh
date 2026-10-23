@@ -1,7 +1,8 @@
 #!/bin/sh
-# Starts Ollama, runs dogear-extract on the given photos (CPU only), and reports the
-# container's peak working set, anon memory and OOM kills, so the Render instance size
-# can be chosen from evidence.
+# Starts Ollama, then runs on CPU only: with no arguments, `dogear-night` extracts quotes
+# from every pending page photo in R2/MongoDB; with arguments, `dogear-extract` runs on
+# those photo files (smoke tests). Reports the container's peak working set, anon memory
+# and OOM kills, so the Render instance size can be chosen from evidence.
 set -eu
 
 memory-sampler /sys/fs/cgroup /tmp/memory-peak &
@@ -15,7 +16,11 @@ done
 
 started=$(date +%s)
 status=0
-/app/.venv/bin/dogear-extract "$@" --model "${DOGEAR_MODEL}" --cpu-only --threads "${DOGEAR_THREADS:-4}" || status=$?
+if [ "$#" -eq 0 ]; then
+    /app/.venv/bin/dogear-night --model "${DOGEAR_MODEL}" --cpu-only --threads "${DOGEAR_THREADS:-4}" || status=$?
+else
+    /app/.venv/bin/dogear-extract "$@" --model "${DOGEAR_MODEL}" --cpu-only --threads "${DOGEAR_THREADS:-4}" || status=$?
+fi
 elapsed=$(( $(date +%s) - started ))
 
 sleep 1  # one last sample after the run

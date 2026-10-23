@@ -4,7 +4,7 @@ Photograph the pages you highlighted in a paper book. Overnight, a small open-we
 
 Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Steady](https://dev.to/devteam/join-the-hacktoberfest-open-source-ai-challenge-slow-and-steady-2850-in-prizes-across-21-3iee).
 
-**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation and MongoDB-backed, owner-scoped book creation/listing. The React/Vite library uses the selected Small-press catalog design, Auth0 sign-in and representative covers. The real local browser login, callback and authenticated book-list request have passed; the current account correctly shows an empty library. Installable/offline PWA behavior, phone capture and quote review remain pending. See [web setup and boundaries](web/README.md).
+**Status:** work in progress. The extraction pipeline runs from the command line and in a Render cron job. FastAPI runs locally with Auth0 token validation and MongoDB-backed, owner-scoped book creation/listing. The React/Vite library uses the selected Small-press catalog design, Auth0 sign-in and representative covers. The real local browser login, callback and authenticated book-list request have passed; the current account correctly shows an empty library. The API stores page photos in R2 and the night job turns them into quotes to review (see below). Installable/offline PWA behavior remains pending. See [web setup and boundaries](web/README.md).
 
 - [Requirements and feasibility evidence](docs/requirements.md)
 - [Build log (DEV post draft)](docs/post-draft.md)
@@ -146,6 +146,60 @@ books in Atlas, using local RSA/JWKS test identities. Those records were retaine
 for explicit cleanup; no existing records were changed or deleted. This checks
 MongoDB persistence, not the real Auth0 login or PWA flow.
 
+## Capture pages and review quotes
+
+Photograph the highlighted pages of a book; the nightly job turns them into quotes and
+you review them in the morning. Every route needs the same Bearer token as `/books`,
+is scoped to the token's subject, and answers `404` for a book or quote that is not
+yours. All of these need the MongoDB variables; only the upload also needs R2.
+
+| Route | Request | Result |
+|---|---|---|
+| `POST /books/{book_id}/pages` | Raw `image/jpeg` or `image/png` body, same limits and errors as `/books/identify` | `201` `{"id","book_id","status":"pending","created_at"}`; `503` without R2 |
+| `GET /books/{book_id}/pages` | | `200`, your pages of the book, newest first (no photo bytes) |
+| `GET /quotes` | Optional `book_id`, `status` (`pending` or `kept`) | `200`, `[{"id","book_id","page_id","text","flags","status","has_crop","created_at"}]`, oldest first |
+| `GET /quotes/{id}/crop` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` when absent |
+| `PATCH /quotes/{id}` | `{"text"?, "status"?: "kept"}`, text 1-5000 characters | `200`, the quote |
+| `DELETE /quotes/{id}` | | `204` |
+| `POST /books/{book_id}/quotes` | `{"text"}` for a passage the run missed | `201`, a `kept` quote without crop or page |
+
+The upload is validated, re-encoded as an upright JPEG without metadata, and stored in
+a private [Cloudflare R2](https://developers.cloudflare.com/r2/) bucket under
+`pages/<sha256 of the subject>/<page id>.jpg`. The browser never reads that bucket and
+no photo is ever returned by the API.
+
+| Variable | Purpose |
+|---|---|
+| `DOGEAR_R2_ENDPOINT` | `https://<account id>.r2.cloudflarestorage.com` |
+| `DOGEAR_R2_ACCESS_KEY_ID`, `DOGEAR_R2_SECRET_ACCESS_KEY` | An R2 API token limited to Object Read & Write on that bucket |
+| `DOGEAR_R2_BUCKET` | The bucket name |
+
+Set all four on the web service (uploads) and on the night cron job (downloads and
+deletes). Without them the API still works and page uploads answer `503`.
+
+### The night run
+
+`dogear-night` claims pending pages one at a time (a page stuck in `processing` for
+over two hours counts as pending; a `failed` page is retried on later nights up to
+three attempts), downloads each photo, extracts the highlighted passages with
+Tesseract and Gemma, and stores one `pending` quote per passage with a small JPEG crop
+of the passage (at most 800 px wide) in MongoDB. **A processed page's photo is deleted
+from R2**; only the crops stay. If a page fails, its photo is kept and the error is
+recorded on the page. It logs one line, for example
+`dogear-night: pages=5 processed=5 failed=0 quotes=12 seconds=480.2`.
+
+The cron job uses the `Dockerfile` image and needs the `DOGEAR_MONGODB_*` and
+`DOGEAR_R2_*` variables. With no Docker Command the image runs `night-job`, which starts
+Ollama and then:
+
+```bash
+dogear-night --model "$DOGEAR_MODEL" --cpu-only --threads 4
+```
+
+`night-job` with arguments keeps the old behavior: `night-job /app/sample/page.jpg`
+runs `dogear-extract` on those files and prints JSON, with no storage involved.
+Locally: `uv run dogear-night --cpu-only --threads 4` (add `--no-model` for OCR only).
+
 ## Deploy the web app
 
 `Dockerfile.web` builds one image for a Render web service: FastAPI serves the built
@@ -161,6 +215,8 @@ Service environment variables:
 | `DOGEAR_AUTH0_DOMAIN`, `DOGEAR_AUTH0_AUDIENCE` | runtime | Token validation, as in local development |
 | `DOGEAR_MONGODB_URI`, `DOGEAR_MONGODB_USERNAME`, `DOGEAR_MONGODB_DATABASE` | runtime | Atlas connection |
 | `DOGEAR_MONGODB_PASSWORD` | runtime | Secret; set it in the Render dashboard |
+| `DOGEAR_R2_ENDPOINT`, `DOGEAR_R2_BUCKET` | runtime | Page photo bucket (see above) |
+| `DOGEAR_R2_ACCESS_KEY_ID`, `DOGEAR_R2_SECRET_ACCESS_KEY` | runtime | Secrets; set them in the Render dashboard |
 
 The Auth0 application must list the service URL as an allowed callback, logout URL
 and web origin, and Atlas must accept connections from Render's outbound addresses.

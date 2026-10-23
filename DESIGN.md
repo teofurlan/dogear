@@ -175,12 +175,15 @@ Direct, text-led controls with distinct roles.
 - **Outlined:** the centered load-more action uses an ink border, a minimum 48px height and a tonal hover ground.
 - **States:** enabled primary buttons darken within the existing red palette on hover and press; text actions turn red on hover. Disabled buttons retain wait cursors and 0.65 opacity without hover feedback. Buttons and links share a red 3px focus-visible outline with a 4px offset. No active transform is used.
 
+### Cover photo input
+The Add book form uses a flat, dashed-rule dropzone with a native labelled file input covering its entire area. Clicking anywhere or using the keyboard opens the picker; dragging one photo highlights the rule in red and uses the same identification flow. Focus is visible on the complete zone. Narrow layouts (up to 820px) and coarse-pointer devices prioritize a solid-rule camera action with a small drawn camera icon; wider fine-pointer layouts keep the dashed drag/drop prompt. This adapts presentation only: the OS/browser still chooses its native camera or file picker. Saving disables selection and ignores drops; cancellation retains its existing abort behavior. JPEG/PNG and current upload limits remain visible. This is transient recognition, not photo storage.
+
 ### Cards / Containers
 Registered cells rather than floating cards.
 - **Structure:** transparent ground, quiet right/bottom borders, portrait cover and bibliographic labels; the grid supplies its top/left border.
 - **Cover:** a neutral typographic fallback remains behind a representative cover image. The image is contained, not cropped.
-- **Arrival:** only cover images fade from 0.65 to full opacity over 180ms using cubic-bezier(.16,1,.3,1); there is no cell translation or stagger.
-- **Loading:** static neutral cover and text blocks reserve the grid's geometry.
+- **Arrival:** both login and account-library cover images remain hidden until the image load event succeeds, then use a 160ms opacity transition without delaying content.
+- **Loading:** the shared BookCover reserves the 2:3 portrait slot and centers a small rectangular catalog mark: a thin ink/rule outline and a moving red scan line, without shadows, rounded-card styling or a bottom loading text bar. The duplicate inside-cover title is removed to prevent overlap; the complete bibliographic caption remains below. Library lookup and image download share the indicator. Missing matches and image errors stop loading and expose the neutral fallback. Reduced motion leaves a static red rule and removes the crossfade. Each indicator has an accessible indeterminate progress label without repeated live-region announcements or animation wait gates.
 
 ### Navigation
 The header is a wordmark home link with a minimum 44px touch height and, when signed in, a text sign-out action. The same alignment and bottom ink rule persist on mobile. Heading rows wrap their count when space is tight. The footer provides a plain attribution link with a red underline; there is no tab bar or icon navigation system.

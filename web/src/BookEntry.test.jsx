@@ -33,6 +33,50 @@ test('photo fills editable suggestions but never saves until the reader confirms
   expect(createBook.mock.calls[0][1]).toEqual({title: 'Corrected title', author: 'OCR author'});
 });
 
+test('the accessible cover zone accepts native selection and one dropped photo without saving automatically', async () => {
+  let finishSave;
+  createBook.mockReturnValue(new Promise(resolve => {finishSave = resolve;}));
+  identifyBook.mockResolvedValue({title: 'Photo title', author: '', text: ''});
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const input = screen.getByLabelText('Cover photo');
+  expect(input).toHaveAttribute('type', 'file');
+  expect(input).toHaveAttribute('accept', 'image/jpeg,image/png');
+  expect(input).toHaveAttribute('capture', 'environment');
+  expect(input).toHaveAttribute('aria-describedby', 'cover-help');
+  const nativePhoto = new File(['native'], 'native.jpg', {type: 'image/jpeg'});
+  fireEvent.change(input, {target: {files: [nativePhoto]}});
+  expect(await screen.findByDisplayValue('Photo title')).toBeVisible();
+  expect(identifyBook).toHaveBeenCalledWith(expect.any(Function), nativePhoto, expect.objectContaining({signal: expect.any(AbortSignal)}));
+  expect(createBook).not.toHaveBeenCalled();
+
+  const zone = screen.getByRole('group', {name: 'Cover photo options'});
+  const droppedPhoto = new File(['dropped'], 'dropped.png', {type: 'image/png'});
+  fireEvent.dragOver(zone, {dataTransfer: {files: [droppedPhoto]}});
+  expect(zone).toHaveClass('is-drag-over');
+  fireEvent.drop(zone, {dataTransfer: {files: [droppedPhoto]}});
+  expect(await screen.findByDisplayValue('Photo title')).toBeVisible();
+  expect(identifyBook).toHaveBeenLastCalledWith(expect.any(Function), droppedPhoto, expect.objectContaining({signal: expect.any(AbortSignal)}));
+  expect(createBook).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'Photo title'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
+  await waitFor(() => expect(createBook).toHaveBeenCalledTimes(1));
+  expect(input).toBeDisabled();
+  fireEvent.drop(zone, {dataTransfer: {files: [nativePhoto]}});
+  expect(identifyBook).toHaveBeenCalledTimes(2);
+  finishSave(saved);
+  await screen.findByRole('status');
+});
+
+test('touch presentation offers a camera action while retaining desktop drop and native capture', () => {
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const camera = screen.getByText('Take a cover photo');
+  expect(camera.closest('.cover-dropzone-copy')).toHaveClass('cover-dropzone-touch');
+  expect(screen.getByText('Drop a cover photo here').closest('.cover-dropzone-copy')).toHaveClass('cover-dropzone-desktop');
+  expect(screen.getByLabelText('Cover photo')).toHaveAttribute('capture', 'environment');
+  expect(screen.getByLabelText('Cover photo')).toHaveAttribute('accept', 'image/jpeg,image/png');
+});
+
 test('unreadable covers keep manual entry usable without exposing server details', async () => {
   identifyBook.mockRejectedValue(new Error('private process details'));
   render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
