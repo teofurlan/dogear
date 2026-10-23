@@ -3,32 +3,21 @@ title: "I highlight paper books. A small open model types my quotes while I slee
 tags: devchallenge, hf26challenge, opensource, ai
 ---
 
-<!-- DRAFT. Placeholders are marked TODO. -->
-
-*This is a submission for the [Hacktoberfest Open-Source AI Challenge Week 3: Slow and Steady](https://dev.to/devteam/join-the-hacktoberfest-open-source-ai-challenge-slow-and-steady-2850-in-prizes-across-21-3iee).*
-
-> **Status: building in public.** I'm publishing this on day 2 and updating it as the project grows. The changelog at the bottom shows what changed and when.
+*This is a submission for the [Hacktoberfest Open-Source AI Challenge Week 3: Slow and Steady](https://dev.to/challenges/hacktoberfest-week3-2026-10-19).*
 
 ## What I Built
 
-I read on paper, with a highlighter in hand. Afterwards, every quote that stopped me goes into a Notion database, with a template I like. I keep them for three reasons:
+I read on paper, with a highlighter in hand. Every quote that stops me ends up in a Notion database: knowing I'll keep what I mark makes me read more carefully, writing it down helps me remember it, and later I can find the right line when it comes up in a conversation or in something I'm writing.
 
-- **To read on purpose.** Knowing I'll keep what I mark makes me read more carefully.
-- **To remember what I read.** Writing a passage down helps me retain it long after I've closed the book.
-- **To share at the right moment.** A conversation with friends often brings a quote to mind, and I want to find it in seconds instead of flipping through a book I may not have with me.
-- **To write.** My saved quotes end up in what I write.
+The chore is in between: sitting down with the book, finding each highlighted passage again and typing it word by word. By the end of a book I have dozens of highlighted lines and no will to copy them.
 
-The gap between highlighting and saving is a chore I always postpone: sitting down with the book, finding each highlighted passage again, and typing it out word by word. By the time I finish a book, I have dozens of highlighted lines and no will to copy them.
+**Dogear** removes that chore. While reading, the only extra thing I do is take a photo of each page I highlighted. Overnight, a small open-weight model running on a plain CPU in the cloud reads the photos and pulls out exactly the highlighted passages. In the morning I review them and stay in full control: I can keep, edit or delete any quote, and add one the night run missed. What I keep lands in my book log, and in Notion if I want.
 
-**Dogear** removes that chore. While reading, the only extra thing I do is take a photo of each page I highlighted. That's it. Overnight, a small open-weight model running on a CPU in the cloud reads the photos and pulls out exactly the highlighted passages. In the morning, I go through them and stay in full control: I can keep, edit or delete any quote, and add one the night run missed, no matter how confident the model was. What I keep lands in my book log (and in Notion, if I want).
-
-Because I usually need a quote in the middle of a conversation, the log is searchable by meaning, so I can find a quote even when I don't remember its exact words.
-
-It also keeps a minimal reading tracker for free: the last page I photographed is how far I've read.
+> Dogear is still growing. Reading highlights from photos and the night run already work; the screens that connect them to my phone are what I'm building now. [What's still ahead](#whats-still-ahead) says exactly where it stands.
 
 ## Demo
 
-TODO: 60-second video of the full loop (photo while reading → night run → morning review → Notion).
+TODO: deployed link (anyone can sign in and start their own library) and a short video of the loop.
 
 ## Code
 
@@ -36,132 +25,57 @@ TODO: 60-second video of the full loop (photo while reading → night run → mo
 
 ## How I Built It
 
-### The first surprise: my highlighter is almost invisible to a computer
+### My highlighter is almost invisible to a computer
 
-Before writing any app code, I tested the riskiest assumption with three real photos: a cover and two highlighted pages of a Spanish paperback, taken on my lap with one hand.
+Before writing any app code, I tested the riskiest assumption with three real photos taken on my lap, one-handed. In a phone photo, a highlighter barely changes the paper: its color saturation measured about 7 out of 255, which is basically gray.
 
-In a phone photo, a highlighter barely changes the paper. Its color saturation measured about 7 out of 255, which is basically gray, so looking for "colored pixels" found nothing.
+What worked was the Lab color space, which separates brightness from color. Instead of looking for a particular color, the code measures how far each pixel drifts from the paper's own tint, so it doesn't care which pen I picked. Light was the next trap: with half a page in shadow, one paper tint no longer fit the whole photo. The fix was to fit the tint as a smooth surface across the page and compare each pixel with the tint at its own position. That found every highlighted block on my test pages.
 
-What worked was the Lab color space, which separates brightness from color. Instead of looking for any particular color, I compare each pixel with the paper's own tint on that photo: highlighted paper drifts away from it. That found **every highlighted block on both pages**, including one on the curled facing page.
+### The model is a good reader and a bad judge
 
-I use several highlighter colors, so the app must not care which one I picked. It measures *how far* a pixel drifts from the paper's tint, not *toward which color*. On synthetic pages, yellow, green, pink, blue and orange pens are all found. TODO: real photos with more than one color.
-
-The next trap was light. In one of my photos the bottom half of the page was in shadow, and the paper there had a slightly different tint than at the top. With a single reference tint, half the page stopped looking like paper. The fix was to fit the paper's tint as a smooth surface across the photo, ignoring outliers such as highlights, the hand and the table, and to measure every pixel against the tint *at its own position*.
-
-Two more details keep things honest. The page is the largest paper region with its holes filled, so text and highlights count as page, but a thumb entering from the edge never does, even when its color is close to an orange highlighter. And the facing page that curls up next to the one I photographed is ignored.
-
-TODO: before/after image of the color mask.
-
-### The second surprise: the model is a good reader and a bad judge
-
-My first plan was to hand the whole photo to Gemma 4 (`e4b`, running locally in Ollama) and ask for the highlighted text. It didn't work:
-
-- On one page, it found 1 of 3 highlighted passages.
-- On the other, it confidently returned the chapter title, which isn't highlighted at all.
-
-The faint highlight simply doesn't survive the downscaling a vision model applies to a whole page.
-
-Given only a crop of a highlighted block, it transcribed well. But in one block it silently dropped a whole clause. A quote app that invents or drops words is worse than no app.
+My first plan was to hand the whole photo to Gemma 4 (`e4b`, running in Ollama) and ask for the highlighted text. On one page it found 1 of 3 passages. On the other, it confidently returned the chapter title, which isn't highlighted at all. Given only a crop, it read well, but once it silently dropped a whole clause. A quote app that drops words is worse than no app.
 
 So the design flipped: **the model reads, the code decides.**
 
 1. **Color decides what is highlighted.** It's deterministic and cheap.
-2. **OCR gives the position of every word.** Tesseract returns a box for each word. A word counts as part of a quote when at least a quarter of the paper under its box carries highlighter. On my two test pages, this found the start and end of every highlighted passage on the flat page, down to the exact word, in about 5 seconds per page on a CPU. It even caught highlights that start in the middle of a line.
-3. **Two independent readers, compared.** OCR is great at *where* but sloppy at *what*: it misread letters inside words and scrambled a long passage near the column gutter. Gemma is the opposite: clean text, but it can skip words. So each highlighted block is read by both, and the model's version is kept only where the two agree.
-4. **Disagreement is flagged for me.** If Gemma drops words that OCR saw, or writes words OCR never saw, the quote reaches my morning review flagged, with the photo crop next to it. Flags only point my attention: every quote, flagged or not, stays mine to keep, edit or delete.
+2. **OCR finds where every word is.** Tesseract returns a box for each word, and a word belongs to a quote when enough of the paper under it carries highlighter. That found the exact first and last word of every passage, even when a highlight starts mid-line.
+3. **Two readers, compared.** OCR knows *where* but misreads letters. Gemma writes clean text but can skip words. Each block is read by both, and Gemma's version is kept where they agree.
+4. **Disagreement is flagged for me**, with the photo crop next to the quote. Flags only point my attention: every quote stays mine to keep, edit or delete.
 
-### First full run
-
-On my two test pages, the pipeline found 3 of 3 highlighted passages on each page, with no false quotes. With Gemma on 4 CPU threads, a page took 40 to 75 seconds, including loading the model.
-
-Two of my first fixes came from watching the model fail:
-
-- **The crop shape matters.** At first I sent Gemma a crop where everything except the OCR word boxes was blanked. Where OCR got confused, those boxes had holes, and Gemma read fragments. Now the crop is shaped like a text selection: whole lines in the middle, and only the start of the first line and the end of the last line are blanked. With that change, Gemma read a long passage almost perfectly, including the clause it had dropped before.
-- **Agreement must forgive spacing.** OCR glues two short words into one or splits one word in two, and Gemma copies the line-break hyphens of the page. Comparing the letters of differing word runs, and rejoining hyphens where OCR saw a line break, removed the false alarms.
-
-After these fixes, 4 of the 6 quotes came out with both readings agreeing. The other 2 are flagged, and they are exactly the two passages where OCR scrambled the text near the column gutter. No wrong quote was presented as confident.
+On my two test pages, the pipeline found 3 of 3 passages on each, with no false quotes. Watching Gemma fail taught me two fixes: send crops shaped like a text selection instead of scattered word boxes, and compare readings in a way that forgives OCR's glued words and the page's line-break hyphens. In the end, 4 of the 6 quotes came out with both readers agreeing, and the other 2 were flagged, exactly where OCR scrambled the text near the book's gutter. No wrong quote was presented as confident.
 
 ### Slow on purpose
 
-None of this needs to happen when I take the photo, so it doesn't. A nightly job on Render processes the day's photos on a plain CPU, with no GPU.
+None of this has to happen when I take the photo, so it doesn't. A nightly cron job on Render processes the day's photos on a plain CPU, with no GPU. The model weights are baked into the Docker image, and a page takes about a minute once the model is loaded, so even a heavy reading day of 30 pages is done in about half an hour, long before I wake up. The job first ran on an 8 GB instance for about 2.5 cents, but Gemma peaked near 7.4 GiB there, so it moved to 16 GB for about a cent more per night.
 
-On 4 CPU threads, Gemma takes about 25 seconds to load and 9 to 18 seconds per highlighted block, and on my laptop the model process showed about 4 GB in use. That's about a minute per page, so a heavy reading day of 30 pages takes roughly half an hour, finished long before I wake up.
+### From a script to an app
 
-The model weights are baked into the Docker image, so a run never downloads them. On a Render cron instance with 4 CPUs and 8 GB, the first run pulled the image and started Ollama in about 4 minutes, then processed a sample page in about 2 minutes, model load included. That run cost about 2.5 cents. On Linux the picture changed: the model's weights live in the process's own memory, and the job peaked at about 7.4 GiB of the 8 GiB instance. It fits, but with little room to spare, so the job moved to a 16 GB instance. That costs about a cent more per night, a fair price for a night run that never runs out of memory.
+Around the pipeline, I'm building a FastAPI server and a React PWA:
 
-TODO: architecture diagram (phone PWA → Render web service → MongoDB Atlas → nightly Render cron → review → Notion).
+- **My books, only for me.** Sign-in goes through Auth0, the server checks every token, and books live in MongoDB Atlas tied to the verified account. Tests make sure one reader never sees another reader's books.
+- **A library that looks like a book catalog**, with covers from Open Library. When there's no reliable match, a book gets a plain placeholder instead of a guessed edition.
+- **Adding a book, the lazy way.** I type it or photograph the cover. OCR suggests the title and author, nothing is saved until I confirm, and the cover photo is never stored. Same rule as the quotes: the machine suggests, I decide.
+- **A careful PWA.** Its service worker keeps only a public "you're offline" page. Sign-in data, books and photos never touch its cache.
 
-### A small HTTP foundation, separate from the model
+### What's still ahead
 
-The first FastAPI slice runs locally: a liveness endpoint, interactive API docs,
-and HTTP tests. Starting the app does not load OCR or Gemma. A healthy HTTP
-process does not prove that storage or authentication works. The next slice adds
-Auth0 access-token validation and a protected identity endpoint. Its tests sign
-real RSA tokens locally and replace only the public-key HTTP transport; invalid
-signatures, issuers, audiences and expired tokens are rejected. The first data slice adds
-MongoDB-backed book creation/listing, with a required title and optional author.
-Every write and query uses the verified token subject as its owner, and HTTP tests
-check that one reader cannot see another reader's books. A local HTTP smoke test also
-created and retrieved two marked synthetic books in Atlas using local JWT/JWKS
-test identities; this is not a live Auth0 login or phone-to-server test. The existing Docker
-image remains the night job, not an API deployment.
-
-### A first library, without pretending the rest is ready
-
-The mobile-first React interface now signs in through the Auth0 SDK and lists the
-reader's own books through the existing API. I compared two interactive visual
-directions and chose Small-press catalog: condensed headings, compact cover cells,
-thin rules and restrained red on a cool neutral ground. Representative covers
-come from Open Library using title and author; missing or ambiguous matches keep
-a neutral placeholder, never a guessed edition claim.
-
-The real local browser flow completed consent, returned to a clean callback URL
-and fetched the authenticated library successfully. That account has no books, so
-the app shows an honest empty state instead of inserting examples. Fourteen
-frontend tests and a production build pass; independent backend verification
-reports 107 passes and two existing platform skips. Populated visual examples
-remain mocks, not proof of populated live-account rendering. Camera capture,
-book-entry controls, reading status, offline installation and quote review are
-still future work.
-
-### Reading several books at once
-
-TODO: the shelf, the sticky "currently reading" book on the camera screen, the "still reading X?" prompt after a gap, and the nightly check that flags pages that don't match the chosen book.
+Reading highlights, the night run and the library work. What's missing is what ties them together: photographing pages from the app, sending them to the night run, and the morning review. After that come search by meaning and the Notion export.
 
 ## Why Does Open Innovation Matter?
 
-TODO, with real numbers once built. Points to cover:
-
-- **What I read stays mine.** My photos and highlights are processed by a model I run, not sent to a third-party API.
-- **Zero running cost at the model level.** A small open model on a CPU is cheap enough to run every night for years. Readwise already scans paper highlights, but it is a paid, closed cloud service.
-- **Swappable parts.** The model, the OCR engine and the destination (Notion, Markdown, Obsidian) sit behind small interfaces, so I can swap any of them.
-- **Fine-tuning is possible at all.** TODO: whether a fine-tuned small model fixes the dropped-clause and hyphenation errors (Tinker), measured against the base model.
+- **My reading stays mine.** My photos and highlights are read by a model running in my own night job, not sent to a third-party AI API.
+- **It costs a few cents a night.** A small open model on a plain CPU is cheap enough to run every night for years, with no per-request bill.
+- **The model doesn't change under me.** The whole design rests on knowing how Gemma fails. With the weights pinned in my image, tomorrow's model fails the same way today's does, so the checks I tuned against it keep working.
+- **Swappable parts.** The model and the OCR sit behind small interfaces, so a better open model can replace Gemma without touching the rest.
 
 ## The Lazy Payoff
 
 **Before:** in a dense book, I highlight 2 or 3 passages per page. Copying them is a 30 to 60 minute typing session, so I keep postponing it, and the quotes pile up in books I've already shelved.
 
-**After:** one photo per highlighted page, taken while the book is still open, and a short review over breakfast. TODO: measure the real review time once the app exists.
+**After:** one photo per highlighted page, taken while the book is still open, and a short review over breakfast. I'll measure the real review time as soon as the review screen exists.
 
 ## Prize Categories
 
-TODO: confirm once each one is actually used.
-
-- Best Use of Render: web service and nightly CPU job
-- Best Use of Gemma: the vision model that reads the highlights
-- Best Use of MongoDB Atlas: books, photos and quotes, plus semantic search to find a quote by its meaning
-- Best Use of Sentry Agent Tracing: per-photo latency and token traces of the nightly run
-- Best Use of Tinker: only if the fine-tune beats the baseline
-- .tech Domain
-
-## Changelog
-
-- 2026-10-20: First version. Idea, feasibility test with real photos, and the public repository.
-- 2026-10-20: The extraction pipeline runs end to end from the command line (any pen color, uneven light, two readers compared).
-- 2026-10-20: The night job runs as a Render cron job on a plain CPU, with the model baked into the image.
-- 2026-10-21: Added the local FastAPI foundation, with a liveness endpoint, interactive API documentation and HTTP tests. Authentication and data are next.
-- 2026-10-21: Added Auth0 API token validation and a protected identity endpoint, with offline RSA/JWKS tests. Live tenant integration and data remain pending.
-- 2026-10-21: Added owner-scoped MongoDB book creation/listing and HTTP isolation tests; the PWA, cover/ISBN lookup and photo storage remain pending.
-- 2026-10-21: Added the Small-press catalog library with real local Auth0 login, owner-scoped listing and representative cover fallback; installable/offline behavior, ISBN lookup and photo capture remain pending.
-
-- 2026-10-22: Added manual book entry and transient cover-photo OCR suggestions with editable confirmation before saving. Cover reading is bounded and local; no photo is persisted and failures retain manual entry. Browser automation could not attach in this session; new visual proof is pending.
+- **Best Use of Gemma:** Gemma 4 `e4b` reads every highlighted block, cross-checked against OCR.
+- **Best Use of Render:** the nightly CPU cron job that runs the extraction.
+- **Best Use of MongoDB Atlas:** each reader's books, stored per verified account.
