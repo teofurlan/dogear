@@ -54,7 +54,15 @@ Sources: [Auth0 React SDK](https://auth0.github.io/auth0-react/), [Open Library 
 
 The initial PWA foundation provides the static web app manifest (`manifest.webmanifest`), vector branding (`icon.svg`), and standard/maskable PNG icons (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) using the catalog ground (`#e9e9e5`) and outlined `d.` glyph.
 
-The manifest specifies `display: standalone`, `start_url: /`, `theme_color: #e9e9e5`, and `background_color: #e9e9e5`. Service worker registration, offline caching and public fallback screens are deferred to subsequent modules. Tokens, API responses, book records, photos and authentication callbacks are strictly excluded from client caching.
+The manifest specifies `display: standalone`, `start_url: /`, `theme_color: #e9e9e5`, and `background_color: #e9e9e5`. Tokens, API responses, book records, photos and authentication callbacks are strictly excluded from client caching.
+
+## Offline fallback and service worker
+
+The second PWA module provides the standalone offline contingency document (`web/public/offline.html`) and the scoped service worker (`web/public/sw.js`).
+
+- `offline.html` is a self-contained document in the catalog palette (`#e9e9e5`, `#191919`, `#c8302d`) that explains Dogear requires a connection to load the library, authenticate, or save books. It explicitly clarifies that offline book entry and photo quote capture are not implemented.
+- `sw.js` manages cache `dogear-offline-v1`, pre-caching only static fallback assets (`/offline.html`, `/favicon.svg`, `/icon.svg`, `/icon-192.png`, `/manifest.webmanifest`).
+- Boundaries: Non-GET methods, `/api/` endpoints, Auth0 domains, authentication callbacks, tokens, books, and photos are strictly bypassed and never stored in cache. Navigation requests use network-first with `offline.html` fallback. Client registration is deferred to a subsequent module.
 
 ## Checks and boundaries
 
