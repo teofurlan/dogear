@@ -38,7 +38,7 @@ The eventual workflow is capture on a phone, scheduled processing on Render, the
 
 ## Brand Commitments
 
-The name is Dogear. The user selected Small-press catalog after comparing interactive mocks: condensed headings, compact cover cells, thin rules and restrained red on a cool neutral ground. No fake paper or literal folded-corner effects. The shipped tokens and components are recorded in DESIGN.md; page-specific direction lives in the Impeccable surface brief.
+The product name is Dogear. Show the full lowercase `dogear.` wordmark in the header; reserve the compact `d.` icon for the favicon and other icon-sized contexts. Both retain a red terminal period. The user selected Small-press catalog after comparing interactive mocks: condensed headings, compact cover cells, thin rules and restrained red on a cool neutral ground. No fake paper or literal folded-corner effects. The shipped tokens and components are recorded in DESIGN.md; page-specific direction lives in the Impeccable surface brief.
 
 ## Evidence on Hand
 

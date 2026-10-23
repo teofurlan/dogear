@@ -2,6 +2,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useAuth0} from '@auth0/auth0-react';
 import {listBooks, PAGE_SIZE} from './books.js';
 import {loadCovers} from './covers.js';
+import {chooseExampleBooks} from './example-books.js';
 import BookEntry from './BookEntry.jsx';
 
 function Cover({book, url}) {
@@ -10,6 +11,22 @@ function Cover({book, url}) {
     <div className="cover-fallback" aria-hidden="true"><span className="fallback-title">{book.title}</span><span className="fallback-author">No cover available</span></div>
     {url && !failed ? <img className="cover-image" src={url} alt={`Representative cover of ${book.title}`} width="200" height="300" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : null}
   </div>;
+}
+
+function ExampleGallery() {
+  const [familiarBooks] = useState(() => chooseExampleBooks());
+  return <section className="example-gallery" aria-labelledby="example-gallery-title">
+    <div className="example-gallery-intro">
+      <h2 id="example-gallery-title">A few familiar covers</h2>
+      <p>Public catalog examples, not books in your library.</p>
+    </div>
+    <ul className="book-grid" aria-label="Example book covers">
+      {familiarBooks.map(book => <li className="book" key={book.coverId}>
+        <Cover book={book} url={`https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg?default=false`} />
+        <div className="book-copy"><h3 className="book-title">{book.title}</h3><p className="book-author">{book.author}</p></div>
+      </li>)}
+    </ul>
+  </section>;
 }
 
 function Library({getToken, signIn}) {
@@ -82,6 +99,7 @@ export default function App() {
   const {isLoading, isAuthenticated, user, error, loginWithRedirect, logout, getAccessTokenSilently} = useAuth0();
   const [starting, setStarting] = useState(false);
   const [actionError, setActionError] = useState(false);
+  const showSignIn = !isLoading && !(isAuthenticated && user?.sub && !error);
   async function signIn() {
     setActionError(false); setStarting(true);
     try {await loginWithRedirect();} catch {setActionError(true); setStarting(false);}
@@ -90,12 +108,21 @@ export default function App() {
     setStarting(true); setActionError(false);
     try {await logout({logoutParams: {returnTo: window.location.origin}});} catch {setActionError(true); setStarting(false);}
   }
-  return <div className="catalog-shell">
+  return <div className={`catalog-shell${showSignIn ? ' catalog-shell--signin' : ''}`}>
     <header className="catalog-header"><a className="wordmark" href="/" aria-label="Dogear home">dogear<span aria-hidden="true">.</span></a>{isAuthenticated ? <button className="signout-button" onClick={signOut} disabled={starting}>Sign out</button> : null}</header>
     <main className="catalog-main">
       {isLoading ? <p className="feedback" role="status">Checking your session…</p> : isAuthenticated && user?.sub && !error ? <Library key={user.sub} getToken={getAccessTokenSilently} signIn={signIn} /> : <>
         <div className="catalog-intro"><div className="heading-row"><h1>Your books, together.</h1></div></div>
-        <section className="login-panel"><h2>Keep your shelf close.</h2><p>Sign in to see the books saved in your own library.</p>{error ? <p role="alert">Sign-in could not finish. Try again to start a new session.</p> : null}<button onClick={signIn} disabled={starting}>{starting ? 'Opening sign-in…' : 'Sign in to library'}</button></section>
+        <section className="login-panel">
+          <div className="login-copy">
+            <h2>Keep the lines worth keeping.</h2>
+            <p>One home for your books and favorite quotes. Photograph your highlighted pages—no copying, no retyping.</p>
+            <p className="login-availability">Photo-to-quote capture is coming next. Sign in to view your library today.</p>
+            {error ? <p role="alert">Sign-in could not finish. Try again to start a new session.</p> : null}
+          </div>
+          <button onClick={signIn} disabled={starting}>{starting ? 'Opening sign-in…' : 'Sign in to library'}</button>
+        </section>
+        <ExampleGallery />
       </>}
       {actionError ? <p className="feedback" role="alert">The account action could not finish. Check your connection and try again.</p> : null}
     </main>

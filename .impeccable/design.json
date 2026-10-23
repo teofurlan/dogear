@@ -174,7 +174,7 @@
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Book title; CSS requests 600, bundled display face is 700 only."
+        "purpose": "Book title using the bundled 700-weight display face."
       },
       "body": {
         "displayName": "Body",
@@ -252,7 +252,7 @@
       "kind": "nav",
       "refersTo": "wordmark",
       "description": "Compact identity and direct account action.",
-      "html": "<nav class=\"ds-header\" aria-label=\"Account\"><a class=\"ds-wordmark\" href=\"#\">dogear<span>.</span></a><button class=\"ds-account\">Sign out</button></nav>",
+      "html": "<nav class=\"ds-header\" aria-label=\"Account\"><a class=\"ds-wordmark\" href=\"#\" aria-label=\"Dogear home\">dogear<span>.</span></a><button class=\"ds-account\">Sign out</button></nav>",
       "css": ".ds-header { display:flex; align-items:center; justify-content:space-between; min-height:4.35rem; border-bottom:1px solid var(--catalog-ink, #191919); color:var(--catalog-ink, #191919); } .ds-wordmark { font-family:var(--catalog-display, \"Barlow Condensed\", \"Arial Narrow\", sans-serif); font-size:1.75rem; font-weight:700; letter-spacing:-.035em; line-height:1; color:inherit; text-decoration:none; } .ds-wordmark span { color:var(--catalog-red, #c8302d); } .ds-account {font-family: var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size: .94rem; line-height: 1.5; cursor: pointer; min-height:44px; padding:.45rem .2rem; background:transparent; border:0; color:inherit; text-decoration:underline; text-decoration-color:var(--catalog-red, #c8302d); text-underline-offset:.3em; } .ds-wordmark:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-account:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-account:disabled { cursor:wait; opacity:.65; } @media(min-width:820px) { .ds-header { min-height:5rem; } }"
     },
     {

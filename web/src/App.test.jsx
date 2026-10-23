@@ -1,6 +1,6 @@
 import React from 'react';
-import {render, screen, waitFor, fireEvent} from '@testing-library/react';
-import {beforeEach, expect, test, vi} from 'vitest';
+import {render, screen, waitFor, fireEvent, within} from '@testing-library/react';
+import {afterEach, beforeEach, expect, test, vi} from 'vitest';
 import App from './App.jsx';
 import {listBooks} from './books.js';
 import {loadCovers} from './covers.js';
@@ -14,6 +14,7 @@ vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), BooksError: cla
 vi.mock('./covers.js', () => ({loadCovers: vi.fn()}));
 
 const book = {id: '000000000000000000000001', title: 'A quiet afternoon', author: 'Ada Reed'};
+afterEach(() => vi.restoreAllMocks());
 beforeEach(() => {
   Object.assign(auth, {isLoading: false, isAuthenticated: false, user: {sub: 'reader-a'}, error: null});
   listBooks.mockReset().mockResolvedValue([book]);
@@ -27,9 +28,81 @@ test('signed-out users can start login without fetching books', () => {
   expect(listBooks).not.toHaveBeenCalled();
 });
 
+test('header shows the complete name with red punctuation', () => {
+  render(<App />);
+  const brand = screen.getByRole('link', {name: 'Dogear home'});
+  expect(brand).toHaveTextContent(/^dogear\.$/);
+  expect(brand.querySelector('span')).toHaveTextContent('.');
+});
+
+test('sign-in explains the photo-to-quote purpose without claiming capture is available', () => {
+  render(<App />);
+  expect(screen.getByRole('main').parentElement).toHaveClass('catalog-shell--signin');
+  expect(screen.getByText('One home for your books and favorite quotes. Photograph your highlighted pages—no copying, no retyping.')).toBeVisible();
+  expect(screen.getByText('Photo-to-quote capture is coming next. Sign in to view your library today.')).toBeVisible();
+});
+
+test('signed-out cover gallery labels public examples without accessing account data', () => {
+  render(<App />);
+  const gallery = screen.getByRole('region', {name: 'A few familiar covers'});
+  expect(within(gallery).getByRole('list', {name: 'Example book covers'})).not.toHaveAttribute('tabindex');
+  expect(within(gallery).getAllByRole('listitem')).toHaveLength(4);
+  const images = within(gallery).getAllByRole('img');
+  expect(images).toHaveLength(4);
+  for (const image of images) {
+    expect(image.src).toMatch(/^https:\/\/covers\.openlibrary\.org\/b\/id\/\d+-M\.jpg\?default=false$/);
+    expect(image).toHaveAttribute('referrerPolicy', 'no-referrer');
+  }
+  expect(within(gallery).getByText('Public catalog examples, not books in your library.')).toBeVisible();
+  fireEvent.error(images[0]);
+  expect(within(gallery).getAllByRole('img')).toHaveLength(3);
+  expect(within(within(gallery).getAllByRole('listitem')[0]).getByText('No cover available')).toBeVisible();
+  expect(listBooks).not.toHaveBeenCalled();
+  expect(loadCovers).not.toHaveBeenCalled();
+});
+
+test('example selection stays stable while the signed-out screen rerenders', () => {
+  const view = render(<App />);
+  const titles = () => screen.getAllByRole('heading', {level: 3}).map(heading => heading.textContent);
+  const initial = titles();
+  view.rerender(<App />);
+  expect(titles()).toEqual(initial);
+});
+
+test('returning to sign-in after an authenticated session selects new examples', async () => {
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+  const view = render(<App />);
+  const initial = screen.getAllByRole('heading', {level: 3}).map(heading => heading.textContent);
+  auth.isAuthenticated = true;
+  listBooks.mockResolvedValue([]);
+  view.rerender(<App />);
+  expect(await screen.findByText('Your library is empty.')).toBeVisible();
+  expect(screen.queryByRole('region', {name: 'A few familiar covers'})).not.toBeInTheDocument();
+  random.mockReturnValue(0.999);
+  auth.isAuthenticated = false;
+  view.rerender(<App />);
+  const next = screen.getAllByRole('heading', {level: 3}).map(heading => heading.textContent);
+  expect(next).toHaveLength(4);
+  expect(next).not.toEqual(initial);
+});
+
+test('example gallery stays out of session loading and authenticated empty libraries', async () => {
+  auth.isLoading = true;
+  const view = render(<App />);
+  expect(screen.queryByRole('region', {name: 'A few familiar covers'})).not.toBeInTheDocument();
+  auth.isLoading = false;
+  auth.isAuthenticated = true;
+  listBooks.mockResolvedValue([]);
+  view.rerender(<App />);
+  expect(await screen.findByText('Your library is empty.')).toBeVisible();
+  expect(screen.queryByRole('region', {name: 'A few familiar covers'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
 test('authenticated library shows title, author and a neutral missing-cover treatment', async () => {
   auth.isAuthenticated = true;
   render(<App />);
+  expect(screen.getByRole('main').parentElement).not.toHaveClass('catalog-shell--signin');
   expect(await screen.findByRole('heading', {name: book.title})).toBeVisible();
   expect(screen.getByText(book.author)).toBeVisible();
   expect(screen.getByText('No cover available')).toBeVisible();
