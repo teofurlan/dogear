@@ -133,6 +133,9 @@ def create_app() -> FastAPI:
             "image/png",
         }:
             raise HTTPException(415, "Choose a JPEG or PNG cover photo")
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_BYTES:
+            raise HTTPException(413, "Use a photo smaller than 6 MiB")
         if not cover_slots.acquire(blocking=False):
             raise HTTPException(429, "Cover readers are busy; try again shortly")
         try:
