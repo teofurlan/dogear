@@ -51,6 +51,23 @@ def _public_book(document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def make_client(config: MongoConfig) -> pymongo.MongoClient:
+    return pymongo.MongoClient(
+        config.uri,
+        username=config.username,
+        password=config.password,
+        authSource="admin",
+        connect=False,
+        tls=True,
+        tlsAllowInvalidCertificates=False,
+        tlsAllowInvalidHostnames=False,
+        timeoutMS=5000,
+        serverSelectionTimeoutMS=3000,
+        connectTimeoutMS=3000,
+        w="majority",
+    )
+
+
 class MongoBooks:
     def __init__(self, config: MongoConfig):
         self.config = config
@@ -61,20 +78,7 @@ class MongoBooks:
         # Even connect=False may resolve an SRV URI. Defer the constructor itself.
         with self._lock:
             if self._client is None:
-                self._client = pymongo.MongoClient(
-                    self.config.uri,
-                    username=self.config.username,
-                    password=self.config.password,
-                    authSource="admin",
-                    connect=False,
-                    tls=True,
-                    tlsAllowInvalidCertificates=False,
-                    tlsAllowInvalidHostnames=False,
-                    timeoutMS=5000,
-                    serverSelectionTimeoutMS=3000,
-                    connectTimeoutMS=3000,
-                    w="majority",
-                )
+                self._client = make_client(self.config)
             return self._client[self.config.database]["books"]
 
     def create(self, subject: str, title: str, author: str | None) -> dict[str, Any]:
