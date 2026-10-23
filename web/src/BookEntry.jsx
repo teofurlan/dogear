@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {createBook, identifyBook} from './book-entry.js';
+import './book-entry-dropzone.css';
 
 export default function BookEntry({getToken, onCreated}) {
   const [open, setOpen] = useState(false);
@@ -9,6 +10,7 @@ export default function BookEntry({getToken, onCreated}) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [dragOver, setDragOver] = useState(false);
   const request = useRef(null);
   const saving = useRef(false);
   const toggle = useRef(null);
@@ -16,7 +18,7 @@ export default function BookEntry({getToken, onCreated}) {
 
   function close() {
     request.current?.abort();
-    setOpen(false); setTitle(''); setAuthor(''); setText(''); setError(''); setStatus('idle');
+    setOpen(false); setTitle(''); setAuthor(''); setText(''); setError(''); setStatus('idle'); setDragOver(false);
     toggle.current?.focus();
   }
 
@@ -59,8 +61,19 @@ export default function BookEntry({getToken, onCreated}) {
     {open ? <form aria-label="Add a book" onSubmit={save}>
       <h2>Add a book</h2>
       <p>Photograph the cover to suggest details, or enter them yourself. Review everything before saving.</p>
-      <label htmlFor="cover-photo">Cover photo</label>
-      <input id="cover-photo" type="file" accept="image/jpeg,image/png" capture="environment" disabled={status === 'saving'} onChange={event => {read(event.target.files?.[0]); event.target.value = '';}} aria-describedby="cover-help" />
+      <label className="cover-photo-label" htmlFor="cover-photo">Cover photo</label>
+      <div className={`cover-dropzone${dragOver ? ' is-drag-over' : ''}`} role="group" aria-label="Cover photo options"
+        onDragEnter={event => {event.preventDefault(); if (!saving.current) setDragOver(true);}}
+        onDragOver={event => {event.preventDefault(); if (!saving.current) setDragOver(true);}}
+        onDragLeave={event => {event.preventDefault(); setDragOver(false);}}
+        onDrop={event => {event.preventDefault(); setDragOver(false); if (!saving.current) read(event.dataTransfer.files?.[0]);}}>
+        <input id="cover-photo" type="file" accept="image/jpeg,image/png" capture="environment" disabled={status === 'saving'} onChange={event => {read(event.target.files?.[0]); event.target.value = '';}} aria-describedby="cover-help" />
+        <span className="cover-dropzone-copy cover-dropzone-desktop"><strong>Drop a cover photo here</strong><span>or click anywhere to choose a photo</span></span>
+        <span className="cover-dropzone-copy cover-dropzone-touch">
+          <svg aria-hidden="true" viewBox="0 0 32 26" width="32" height="26" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 7h6l2-4h8l2 4h6v16H4Z" /><circle className="cover-camera-lens" cx="16" cy="14" r="5" /></svg>
+          <strong>Take a cover photo</strong><span>Tap to open your camera or photo picker</span>
+        </span>
+      </div>
       <p id="cover-help" className="field-help">JPEG or PNG, up to 6 MiB and 20 megapixels. The photo is used only to read these details, not stored as your cover.</p>
       {status === 'reading' ? <p role="status">Reading cover… You can cancel at any time.</p> : null}
       {text ? <><p className="field-help">These are OCR suggestions, not a verified catalog match. Check the title and author.</p><details><summary>Detected text</summary><p className="detected-text">{text}</p></details></> : null}

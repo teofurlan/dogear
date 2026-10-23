@@ -26,15 +26,20 @@ The dev server is loopback-only and refuses another port when 5173 is occupied. 
 - The frontend sends a bearer access token only to the same-origin `/api/books` route. Ownership remains a backend decision derived from the verified subject, never a browser-supplied owner.
 - Each account gets a fresh library component. Pending book/cover requests are cancelled when that account leaves. No books or account data are stored in persistent browser storage.
 - Lists load 24 books at a time; “Load more books” continues from the last returned ID. Empty libraries remain empty: no demo entries are inserted.
-- The signed-out screen samples four distinct public-catalog covers from twelve selections across Dune, A Song of Ice and Fire, Jules Verne and George Orwell. All four are fixed in place, with no horizontal scrolling: one row on desktop and a readable two-by-two layout on phones. Selection is renewed on returning to sign-in after an authenticated session (or reloading the page), not during ordinary rerenders. These labeled examples never query the book API or become account records, and disappear when signed in. Their images use the same no-referrer cover host and neutral failure treatment as library covers.
+- The signed-out screen samples four distinct public-catalog covers from twelve selections across Dune, A Song of Ice and Fire, Jules Verne and George Orwell. All four are fixed in place, with no horizontal scrolling: one row on desktop and a readable two-by-two layout on phones. Selection is renewed on returning to sign-in after an authenticated session (or reloading the page), not during ordinary rerenders. These labeled examples never query the book API or become account records, and disappear when signed in. Their images use the same no-referrer cover host and neutral failure treatment as library covers. Both example and account-library portrait slots reserve their dimensions while a centered rectangular catalog mark with a red scan line indicates loading. The full title remains below the cover; the duplicate title inside the slot is removed to avoid overlap. In the library the indicator covers both catalog lookup and image download; a missing match or failed image stops it and leaves the neutral fallback. Reduced-motion users get the same static mark. There is no bottom loading text bar.
 - The header shows the complete `dogear.` wordmark; the compact `d.` is reserved for the favicon and icon-sized contexts. The product/accessibility name remains Dogear. The SVG favicon outlines the bundled Barlow Condensed glyphs, so it does not depend on browser font loading.
 - Sign-in copy explains the book-and-photo-to-quote purpose while explicitly labeling photo capture as forthcoming. A scoped height-aware layout spreads entry content vertically and enlarges covers/headings in tall desktop windows, while remaining compact in shorter windows without hiding overflow. Authenticated libraries keep their normal scrolling layout. At increased zoom, small phone sizes or with extra error text, content remains scrollable instead of being clipped.
 
 ## Add a book
 
 Sign in, choose **Add book**, enter a title and optional author, then **Save book**.
-Alternatively choose **Cover photo** to take/select a JPEG or PNG (up to 6 MiB,
-20 megapixels). Local Tesseract OCR suggests title/author from text size and layout;
+Alternatively drop one photo into the **Cover photo** area or click anywhere in it
+(or focus it and activate it with the keyboard) to take/select a JPEG or PNG (up to 6 MiB,
+20 megapixels). On narrow layouts (up to 820px) or coarse-pointer devices such as phones/tablets,
+the same area instead shows **Take a cover photo** with a camera icon. Wider fine-pointer
+layouts retain the drag/drop prompt. This is still the native input with a rear-camera hint:
+the device/browser decides whether it opens a camera or photo picker, not an in-app camera.
+Local Tesseract OCR suggests title/author from text size and layout;
 it is not a verified catalog identity and may mistake subtitles/publishers for an author.
 Review/edit both fields before saving. Unreadable or unavailable OCR never blocks manual entry.
 

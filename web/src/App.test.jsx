@@ -1,5 +1,5 @@
 import React from 'react';
-import {render, screen, waitFor, fireEvent, within} from '@testing-library/react';
+import {render, screen, waitFor, fireEvent, within, act} from '@testing-library/react';
 import {afterEach, beforeEach, expect, test, vi} from 'vitest';
 import App from './App.jsx';
 import {listBooks} from './books.js';
@@ -40,6 +40,18 @@ test('sign-in explains the photo-to-quote purpose without claiming capture is av
   expect(screen.getByRole('main').parentElement).toHaveClass('catalog-shell--signin');
   expect(screen.getByText('One home for your books and favorite quotes. Photograph your highlighted pages—no copying, no retyping.')).toBeVisible();
   expect(screen.getByText('Photo-to-quote capture is coming next. Sign in to view your library today.')).toBeVisible();
+});
+
+test('signed-out example covers show loading feedback until their image loads', () => {
+  render(<App />);
+  const gallery = screen.getByRole('region', {name: 'A few familiar covers'});
+  expect(within(gallery).getAllByRole('progressbar')).toHaveLength(4);
+  expect(within(gallery).queryByText('Loading cover…')).not.toBeInTheDocument();
+  expect(within(gallery).queryByText('No cover available')).not.toBeInTheDocument();
+  for (const item of within(gallery).getAllByRole('listitem')) {
+    expect(item.querySelector('.fallback-title')).not.toBeInTheDocument();
+    expect(within(item).getByRole('heading', {level: 3})).toBeVisible();
+  }
 });
 
 test('signed-out cover gallery labels public examples without accessing account data', () => {
@@ -105,10 +117,28 @@ test('authenticated library shows title, author and a neutral missing-cover trea
   expect(screen.getByRole('main').parentElement).not.toHaveClass('catalog-shell--signin');
   expect(await screen.findByRole('heading', {name: book.title})).toBeVisible();
   expect(screen.getByText(book.author)).toBeVisible();
-  expect(screen.getByText('No cover available')).toBeVisible();
+  const fallback = await screen.findByText('No cover available');
+  expect(fallback).toBeVisible();
+  expect(fallback.closest('.cover-wrap')).not.toHaveClass('is-loaded');
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   expect(listBooks).toHaveBeenCalledWith(auth.getAccessTokenSilently, expect.objectContaining({signal: expect.any(AbortSignal)}));
   fireEvent.click(screen.getByRole('button', {name: 'Sign out'}));
   expect(auth.logout).toHaveBeenCalledWith({logoutParams: {returnTo: window.location.origin}});
+});
+
+test('library cover loader remains through lookup and download, then stops on load', async () => {
+  auth.isAuthenticated = true;
+  let receive;
+  loadCovers.mockImplementation((books, callback) => {receive = callback;});
+  render(<App />);
+  await screen.findByRole('heading', {name: book.title});
+  expect(screen.getByRole('progressbar', {name: `Loading cover of ${book.title}`})).toBeVisible();
+  expect(screen.queryByText('No cover available')).not.toBeInTheDocument();
+  act(() => receive(book.id, 'https://covers.openlibrary.org/b/id/123-M.jpg?default=false'));
+  expect(screen.getByRole('progressbar')).toBeVisible();
+  fireEvent.load(screen.getByRole('img'));
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', {name: book.title})).toBeVisible();
 });
 
 test('cover failures do not remove a book or hide its full title', async () => {
@@ -119,6 +149,8 @@ test('cover failures do not remove a book or hide its full title', async () => {
   fireEvent.error(image);
   expect(screen.getByRole('heading', {name: book.title})).toBeVisible();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  expect(screen.getByText('No cover available')).toBeVisible();
 });
 
 test('loading and empty states are explicit, with no invented book records', async () => {

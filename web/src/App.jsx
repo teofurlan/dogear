@@ -4,14 +4,7 @@ import {listBooks, PAGE_SIZE} from './books.js';
 import {loadCovers} from './covers.js';
 import {chooseExampleBooks} from './example-books.js';
 import BookEntry from './BookEntry.jsx';
-
-function Cover({book, url}) {
-  const [failed, setFailed] = useState(false);
-  return <div className="cover-wrap">
-    <div className="cover-fallback" aria-hidden="true"><span className="fallback-title">{book.title}</span><span className="fallback-author">No cover available</span></div>
-    {url && !failed ? <img className="cover-image" src={url} alt={`Representative cover of ${book.title}`} width="200" height="300" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : null}
-  </div>;
-}
+import BookCover from './BookCover.jsx';
 
 function ExampleGallery() {
   const [familiarBooks] = useState(() => chooseExampleBooks());
@@ -22,7 +15,7 @@ function ExampleGallery() {
     </div>
     <ul className="book-grid" aria-label="Example book covers">
       {familiarBooks.map(book => <li className="book" key={book.coverId}>
-        <Cover book={book} url={`https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg?default=false`} />
+        <BookCover book={book} url={`https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg?default=false`} />
         <div className="book-copy"><h3 className="book-title">{book.title}</h3><p className="book-author">{book.author}</p></div>
       </li>)}
     </ul>
@@ -90,7 +83,7 @@ function Library({getToken, signIn}) {
     {status === 'loading' ? <><p role="status" className="feedback">Loading your library…</p><ul className="book-grid skeleton-grid" aria-hidden="true">{[0,1,2,3].map(index => <li key={index} className="book skeleton"><div className="cover-wrap" /><div className="book-copy" /></li>)}</ul></> : null}
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
     {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
-    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><Cover book={book} url={covers[book.id]} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></li>)}</ul> : null}
+    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></li>)}</ul> : null}
     {hasMore && !error ? <button className="load-more" disabled={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
   </>;
 }
