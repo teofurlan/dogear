@@ -50,6 +50,12 @@ Title and author must match normalized metadata. An authorless book needs a sing
 
 Sources: [Auth0 React SDK](https://auth0.github.io/auth0-react/), [Open Library API usage](https://openlibrary.org/developers/api), [cover API](https://openlibrary.org/dev/docs/api/covers).
 
+## Web app manifest and icons
+
+The initial PWA foundation provides the static web app manifest (`manifest.webmanifest`), vector branding (`icon.svg`), and standard/maskable PNG icons (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) using the catalog ground (`#e9e9e5`) and outlined `d.` glyph.
+
+The manifest specifies `display: standalone`, `start_url: /`, `theme_color: #e9e9e5`, and `background_color: #e9e9e5`. Service worker registration, offline caching and public fallback screens are deferred to subsequent modules. Tokens, API responses, book records, photos and authentication callbacks are strictly excluded from client caching.
+
 ## Checks and boundaries
 
 ```powershell
