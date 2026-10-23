@@ -146,6 +146,28 @@ books in Atlas, using local RSA/JWKS test identities. Those records were retaine
 for explicit cleanup; no existing records were changed or deleted. This checks
 MongoDB persistence, not the real Auth0 login or PWA flow.
 
+## Deploy the web app
+
+`Dockerfile.web` builds one image for a Render web service: FastAPI serves the built
+PWA and mounts the API under `/api`, the same path the Vite dev proxy uses, so the
+browser only talks to its own origin. It installs Tesseract for cover photos but not
+Ollama or Gemma; the night job keeps its own image (`Dockerfile`).
+
+Service environment variables:
+
+| Variable | Used | Value |
+|---|---|---|
+| `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE` | build | Public Auth0 identifiers, embedded in the bundle |
+| `DOGEAR_AUTH0_DOMAIN`, `DOGEAR_AUTH0_AUDIENCE` | runtime | Token validation, as in local development |
+| `DOGEAR_MONGODB_URI`, `DOGEAR_MONGODB_USERNAME`, `DOGEAR_MONGODB_DATABASE` | runtime | Atlas connection |
+| `DOGEAR_MONGODB_PASSWORD` | runtime | Secret; set it in the Render dashboard |
+
+The Auth0 application must list the service URL as an allowed callback, logout URL
+and web origin, and Atlas must accept connections from Render's outbound addresses.
+`index.html`, `sw.js` and the manifest are served with `no-cache` so a deploy reaches
+installed apps; fingerprinted files under `assets/` are cached as immutable. The
+service starts only when the frontend build exists.
+
 ## Tests
 
 ```bash
