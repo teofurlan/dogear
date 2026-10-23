@@ -12,6 +12,23 @@ MAX_BYTES = 6 * 1024 * 1024
 MAX_PIXELS = 20_000_000
 
 
+# Tesseract needs to find itself and its data, nothing else from the service.
+OCR_ENVIRONMENT = (
+    "PATH",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TESSDATA_PREFIX",
+    "LANG",
+    "LC_ALL",
+)
+
+
+def ocr_environment() -> dict[str, str]:
+    return {name: os.environ[name] for name in OCR_ENVIRONMENT if name in os.environ}
+
+
 class CoverError(Exception):
     def __init__(self, status: int, message: str):
         self.status, self.message = status, message
@@ -93,7 +110,7 @@ def identify_cover(data: bytes) -> dict:
             capture_output=True,
             timeout=15,
             check=True,
-            env={**os.environ, "OMP_THREAD_LIMIT": "2"},
+            env={**ocr_environment(), "OMP_THREAD_LIMIT": "2"},
         )
         return suggest(result.stdout.decode("utf-8"))
     except (OSError, subprocess.SubprocessError, UnicodeError, KeyError, ValueError):
