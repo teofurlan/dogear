@@ -35,11 +35,11 @@ test('header shows the complete name with red punctuation', () => {
   expect(brand.querySelector('span')).toHaveTextContent('.');
 });
 
-test('sign-in explains the photo-to-quote purpose without claiming capture is available', () => {
+test('sign-in explains the photo-to-quote loop', () => {
   render(<App />);
   expect(screen.getByRole('main').parentElement).toHaveClass('catalog-shell--signin');
   expect(screen.getByText('One home for your books and favorite quotes. Photograph your highlighted pages—no copying, no retyping.')).toBeVisible();
-  expect(screen.getByText('Photo-to-quote capture is coming next. Sign in to view your library today.')).toBeVisible();
+  expect(screen.getByText('Snap a page while you read. A small open model types the highlights overnight; you review them in the morning.')).toBeVisible();
 });
 
 test('signed-out example covers show loading feedback until their image loads', () => {

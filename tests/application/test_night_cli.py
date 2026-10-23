@@ -40,7 +40,7 @@ def recorded(monkeypatch, configured):
 
     def run(store, photos, extract, **_):
         calls["extract"] = extract
-        return NightSummary(2, 1, 1, 3)
+        return calls.get("summary", NightSummary(2, 2, 0, 3))
 
     monkeypatch.setattr(night_cli, "MongoCaptures", Store)
     monkeypatch.setattr(night_cli, "R2Photos", lambda config: object())
@@ -56,7 +56,13 @@ def test_the_run_uses_the_same_model_options_as_dogear_extract(recorded, capsys)
     assert recorded["reader"]["model"] == "gemma4:e2b"
     assert recorded["reader"]["cpu_only"] is True and recorded["reader"]["threads"] == 3
     assert recorded["store"].closed
-    assert "dogear-night: pages=2 processed=1 failed=1 quotes=3" in capsys.readouterr().err
+    assert "dogear-night: pages=2 processed=2 failed=0 quotes=3" in capsys.readouterr().err
+
+
+def test_a_failed_page_makes_the_run_exit_nonzero_so_render_reports_it(recorded, capsys):
+    recorded["summary"] = NightSummary(2, 1, 1, 3)
+    assert night_cli.main([]) == 1
+    assert "failed=1" in capsys.readouterr().err
 
 
 def test_no_model_runs_ocr_only(recorded):

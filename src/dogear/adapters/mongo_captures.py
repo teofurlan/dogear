@@ -10,10 +10,9 @@ from pymongo import ReturnDocument
 from pymongo.errors import PyMongoError
 
 from dogear.adapters.mongo_books import MongoConfig, make_client
-from dogear.ports.captures import CapturesUnavailable
+from dogear.ports.captures import MAX_ATTEMPTS, CapturesUnavailable
 
 STALE_AFTER = timedelta(hours=2)
-MAX_ATTEMPTS = 3
 NO_CROP = {"crop": 0}  # list queries never pull the image bytes
 
 

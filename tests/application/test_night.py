@@ -156,3 +156,26 @@ def test_a_photo_that_cannot_be_deleted_does_not_undo_the_result(world):
 
 def test_the_summary_is_one_line():
     assert str(NightSummary(5, 3, 2, 9)) == "pages=5 processed=3 failed=2 quotes=9"
+
+
+def ocr_only(image):
+    return [Candidate("Ocr text", "Ocr text", Box(100, 100, 1200, 200), ("model_unavailable",))]
+
+
+def test_an_unreachable_model_keeps_the_photo_for_another_night(world):
+    world.extract = ocr_only
+    page = world.page()
+    summary = world.run()
+    assert summary == NightSummary(claimed=1, processed=0, failed=1, quotes=0)
+    assert page["status"] == "failed" and "ReaderUnavailable" in page["error"]
+    assert page["key"] in world.photos.objects
+    assert world.store.quotes == []
+
+
+def test_the_last_attempt_settles_for_ocr_text_instead_of_retrying_forever(world):
+    world.extract = ocr_only
+    page = world.page(status="failed", attempts=2)
+    summary = world.run()
+    assert summary == NightSummary(claimed=1, processed=1, failed=0, quotes=1)
+    assert page["status"] == "processed"
+    assert world.store.quotes[0]["flags"] == ["model_unavailable"]

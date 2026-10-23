@@ -16,8 +16,9 @@ import numpy as np
 
 from dogear.application.extract import Candidate
 from dogear.domain.passages import Box
-from dogear.ports.captures import NightStore
+from dogear.ports.captures import MAX_ATTEMPTS, NightStore
 from dogear.ports.photo_store import PhotosUnavailable, PhotoStore
+from dogear.ports.reader import ReaderUnavailable
 
 CROP_MAX_WIDTH = 800
 CROP_QUALITY = 80
@@ -72,7 +73,10 @@ def run_night(
             found = _process(page, store, photos, extract, now)
         except Exception as error:  # noqa: BLE001 - any failure keeps the photo
             log.warning("page %s failed: %s", page["id"], error)
-            store.fail_page(page["id"], f"{type(error).__name__}: {error}")
+            try:
+                store.fail_page(page["id"], f"{type(error).__name__}: {error}")
+            except Exception as unrecorded:  # noqa: BLE001 - claim expiry retries it
+                log.warning("page %s failure not recorded: %s", page["id"], unrecorded)
             failed += 1
             continue
         processed += 1
@@ -90,6 +94,12 @@ def _process(page, store, photos, extract, now) -> int:
     if image is None:
         raise ValueError("the photo could not be decoded")
     candidates = extract(image)
+    # Deleting the photo after an OCR-only reading would be irreversible, so a page
+    # waits for a night with the model, settling for OCR only on its last attempt.
+    if page["attempts"] < MAX_ATTEMPTS and any(
+        "model_unavailable" in c.flags for c in candidates
+    ):
+        raise ReaderUnavailable("the model did not read this page")
     store.replace_page_quotes(
         page,
         [

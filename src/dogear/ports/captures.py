@@ -8,6 +8,9 @@ from datetime import datetime
 from typing import Any, Collection, Protocol
 
 
+MAX_ATTEMPTS = 3  # night runs that may claim one page before it is left as failed
+
+
 class CapturesUnavailable(Exception):
     """Storage cannot safely complete the requested operation."""
 

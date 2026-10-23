@@ -57,3 +57,15 @@ test('fetchCrop returns the authorized image blob', async () => {
   expect(fetch.mock.calls[0][0]).toBe('/api/quotes/q1/crop');
   expect(fetch.mock.calls[0][1].headers).toEqual({Authorization: 'Bearer tok'});
 });
+
+test('requests still work on browsers without AbortSignal.any (iOS Safari before 17.4)', async () => {
+  vi.stubGlobal('AbortSignal', {timeout: AbortSignal.timeout.bind(AbortSignal)});
+  const fetch = vi.fn().mockResolvedValue(ok([]));
+  vi.stubGlobal('fetch', fetch);
+  const controller = new AbortController();
+  await listPages(getToken, id, {signal: controller.signal});
+  const {signal} = fetch.mock.calls[0][1];
+  expect(signal.aborted).toBe(false);
+  controller.abort();
+  expect(signal.aborted).toBe(true);
+});

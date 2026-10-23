@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         store.close()
     seconds = round(time.perf_counter() - started, 1)
     print(f"dogear-night: {summary} seconds={seconds}", file=sys.stderr)
-    return 0
+    return 1 if summary.failed else 0  # a failed page makes Render report the run
 
 
 if __name__ == "__main__":

@@ -3,11 +3,10 @@
 from datetime import datetime, timedelta, timezone
 from itertools import count
 
-from dogear.ports.captures import CapturesUnavailable
+from dogear.ports.captures import MAX_ATTEMPTS, CapturesUnavailable
 from dogear.ports.photo_store import PhotosUnavailable
 
 STALE = timedelta(hours=2)
-MAX_ATTEMPTS = 3
 
 
 class FakePhotos:

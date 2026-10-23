@@ -150,7 +150,7 @@ export default function App() {
           <div className="login-copy">
             <h2>Keep the lines worth keeping.</h2>
             <p>One home for your books and favorite quotes. Photograph your highlighted pages—no copying, no retyping.</p>
-            <p className="login-availability">Photo-to-quote capture is coming next. Sign in to view your library today.</p>
+            <p className="login-availability">Snap a page while you read. A small open model types the highlights overnight; you review them in the morning.</p>
             {error ? <p role="alert">Sign-in could not finish. Try again to start a new session.</p> : null}
           </div>
           <button onClick={signIn} disabled={starting}>{starting ? 'Opening sign-in…' : 'Sign in to library'}</button>
