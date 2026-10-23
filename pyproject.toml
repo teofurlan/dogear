@@ -6,6 +6,7 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.13"
 dependencies = [
+    "boto3>=1.43.118",
     "fastapi>=0.156.8",
     "numpy>=2.2",
     "opencv-python-headless>=4.11",
@@ -18,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 dogear-extract = "dogear.entrypoints.extract_cli:main"
+dogear-night = "dogear.entrypoints.night_cli:main"
 
 [dependency-groups]
 dev = [

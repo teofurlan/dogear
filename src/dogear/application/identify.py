@@ -66,26 +66,22 @@ def suggest(tsv: str) -> dict:
     return {"title": title, "author": author, "text": text}
 
 
-def identify_cover(data: bytes) -> dict:
-    # Lazy imports keep health/docs and normal book requests independent of OCR.
+def load_photo(data: bytes, what: str = "cover photo"):
+    """Validate an upload and return it upright as an RGB image, or raise CoverError."""
+    # Lazy import keeps health/docs and normal book requests independent of imaging.
     from PIL import Image, ImageOps, UnidentifiedImageError
 
-    from dogear.adapters.tesseract_ocr import default_tesseract_cmd
-
     if not data or len(data) > MAX_BYTES:
-        raise CoverError(422, "Choose a non-empty JPEG or PNG cover photo")
+        raise CoverError(422, f"Choose a non-empty JPEG or PNG {what}")
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(BytesIO(data)) as image:
                 if image.format not in {"JPEG", "PNG"}:
-                    raise CoverError(415, "Choose a JPEG or PNG cover photo")
+                    raise CoverError(415, f"Choose a JPEG or PNG {what}")
                 if image.width * image.height > MAX_PIXELS or max(image.size) > 10000:
                     raise CoverError(413, "Use a smaller photo (at most 20 megapixels)")
-                image = ImageOps.exif_transpose(image)
-                image.thumbnail((1800, 1800))
-                output = BytesIO()
-                image.convert("RGB").save(output, format="PNG")
+                return ImageOps.exif_transpose(image).convert("RGB")
     except (
         UnidentifiedImageError,
         OSError,
@@ -94,6 +90,15 @@ def identify_cover(data: bytes) -> dict:
         Image.DecompressionBombWarning,
     ):
         raise CoverError(422, "The photo could not be read; try JPEG or PNG") from None
+
+
+def identify_cover(data: bytes) -> dict:
+    from dogear.adapters.tesseract_ocr import default_tesseract_cmd
+
+    image = load_photo(data)
+    image.thumbnail((1800, 1800))
+    output = BytesIO()
+    image.save(output, format="PNG")
     command = [default_tesseract_cmd(), "stdin", "stdout", "-l", "spa", "--psm", "11"]
     tessdata = os.environ.get("DOGEAR_TESSDATA")
     local = Path("models/tessdata")
