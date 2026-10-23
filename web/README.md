@@ -52,17 +52,23 @@ Sources: [Auth0 React SDK](https://auth0.github.io/auth0-react/), [Open Library 
 
 ## Web app manifest and icons
 
-The initial PWA foundation provides the static web app manifest (`manifest.webmanifest`), vector branding (`icon.svg`), and standard/maskable PNG icons (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) using the catalog ground (`#e9e9e5`) and outlined `d.` glyph.
+The installable PWA foundation provides the static web app manifest (`manifest.webmanifest`), vector branding (`icon.svg`), and standard/maskable PNG icons (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`) using the catalog ground (`#e9e9e5`) and outlined `d.` glyph. The production client registers `/sw.js` only in a secure context with service-worker support; registration failure does not affect startup or Auth0 callback handling.
 
 The manifest specifies `display: standalone`, `start_url: /`, `theme_color: #e9e9e5`, and `background_color: #e9e9e5`. Tokens, API responses, book records, photos and authentication callbacks are strictly excluded from client caching.
 
 ## Offline fallback and service worker
 
-The second PWA module provides the standalone offline contingency document (`web/public/offline.html`) and the scoped service worker (`web/public/sw.js`).
+The offline contingency document (`web/public/offline.html`) is a self-contained page in the catalog palette (`#e9e9e5`, `#191919`, `#c8302d`) that explains Dogear needs a connection to load the library, authenticate, or save books. It explicitly clarifies that offline book entry and photo quote capture are not implemented.
 
-- `offline.html` is a self-contained document in the catalog palette (`#e9e9e5`, `#191919`, `#c8302d`) that explains Dogear requires a connection to load the library, authenticate, or save books. It explicitly clarifies that offline book entry and photo quote capture are not implemented.
-- `sw.js` manages cache `dogear-offline-v1`, pre-caching only static fallback assets (`/offline.html`, `/favicon.svg`, `/icon.svg`, `/icon-192.png`, `/manifest.webmanifest`).
-- Boundaries: Non-GET methods, `/api/` endpoints, Auth0 domains, authentication callbacks, tokens, books, and photos are strictly bypassed and never stored in cache. Navigation requests use network-first with `offline.html` fallback. Client registration is deferred to a subsequent module.
+The service worker manages only `dogear-offline-v2`, containing exactly the public `/offline.html` document. Activation removes superseded Dogear offline caches while preserving unrelated caches. Only same-origin, query-free root GET navigations without an Authorization header are network-first (`no-store`); a network failure falls back to the named offline document. Other requests—including API, callback, assets, photos, and non-GET requests—bypass the worker entirely. Navigation responses are never cached. Registration is production-only, secure-context-only and failure-tolerant.
+
+Reproduce the isolated Chrome smoke after building with `PLAYWRIGHT_MODULE` pointing to an existing Playwright module and `CHROME_PATH` to Chrome:
+
+```powershell
+node web/scripts/check-pwa.mjs
+```
+
+The smoke uses a random loopback HTTP server, an in-memory isolated browser context, and blocks external requests; it does not sign in or install the app into the operating system.
 
 ## Checks and boundaries
 
@@ -75,4 +81,4 @@ The tests replace Auth0 hooks and transport calls to check rendering, login/logo
 
 A separate live check completed Auth0 consent, returned to a clean local URL and received `200` from the authenticated book-list endpoint. The actual account had zero books; no demonstration records were inserted. Desktop/mobile screenshots cover the real empty and signed-out states. Populated visual examples are mock references, not evidence of a populated live account. Fourteen frontend tests and a production build pass; independent backend verification reports 107 passes and two existing platform skips.
 
-The interface intentionally has no page-photo upload, reading state, existing-book edit/delete, installable/offline caching or quote-review controls. The separate local comparison demos under `.impeccable/previews` use fixtures and never supply data to this app. Self-hosted Public Sans and Barlow Condensed font files include their OFL notices in `public/fonts/`.
+The interface intentionally has no page-photo upload, reading state, existing-book edit/delete or quote-review controls. When the root page is offline, only the public contingency page is available; offline library use, book entry and quote capture are not implemented. The separate local comparison demos under `.impeccable/previews` use fixtures and never supply data to this app. Self-hosted Public Sans and Barlow Condensed font files include their OFL notices in `public/fonts/`.

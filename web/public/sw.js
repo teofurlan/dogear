@@ -1,61 +1,52 @@
-const CACHE_NAME = 'dogear-offline-v1';
-const PRECACHE_ASSETS = [
-  '/offline.html',
-  '/favicon.svg',
-  '/icon.svg',
-  '/icon-192.png',
-  '/manifest.webmanifest'
-];
+const CACHE_NAME = 'dogear-offline-v2';
+const OFFLINE_DOCUMENT = '/offline.html';
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_ASSETS))
-  );
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const request = new Request(new URL(OFFLINE_DOCUMENT, self.location.origin), {
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error'
+    });
+    const response = await fetch(request);
+    if (!response.ok || response.type === 'opaque') {
+      throw new Error('Offline document could not be safely cached');
+    }
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(OFFLINE_DOCUMENT, response);
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-    ))
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const oldCaches = (await caches.keys()).filter(name =>
+      /^dogear-offline-v\d+$/.test(name) && name !== CACHE_NAME
+    );
+    await Promise.all(oldCaches.map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', event => {
   const request = event.request;
-
-  // Cache strictly handles GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
+  if (request.method !== 'GET' || request.mode !== 'navigate') return;
 
   const url = new URL(request.url);
-
-  // Strict privacy boundary: never intercept, store or mock API calls, auth tokens, or callbacks
   if (
-    url.pathname.startsWith('/api/') ||
-    url.hostname.includes('auth0.com') ||
-    url.pathname.includes('/callback') ||
-    url.searchParams.has('code') ||
-    url.searchParams.has('state')
-  ) {
-    return;
-  }
+    url.origin !== self.location.origin ||
+    url.pathname !== '/' ||
+    url.search !== '' ||
+    url.hash !== '' ||
+    request.headers.has('authorization')
+  ) return;
 
-  // HTML navigation requests: network-first with offline.html fallback
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/offline.html'))
-    );
-    return;
-  }
-
-  // Static pre-cached offline assets: cache-first
-  if (PRECACHE_ASSETS.includes(url.pathname)) {
-    event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request))
-    );
-  }
+  event.respondWith((async () => {
+    try {
+      return await fetch(request, {cache: 'no-store'});
+    } catch {
+      const cache = await caches.open(CACHE_NAME);
+      return await cache.match(OFFLINE_DOCUMENT);
+    }
+  })());
 });
