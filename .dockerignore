@@ -11,3 +11,6 @@ data
 **/__pycache__
 .env
 .env.*
+.review-worktrees
+web/node_modules
+web/dist

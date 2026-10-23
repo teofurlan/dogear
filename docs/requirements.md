@@ -16,6 +16,14 @@ Deadline: 2026-10-25 23:59 PDT.
 
 Out of scope this week: ratings, reviews, goals, statistics, handwritten margin notes.
 
+## Decisions (2026-10-20)
+
+- **Night run:** a Render cron job (`dogear-night`, plan `4c-16g`, daily at 06:00 UTC) builds the Docker image from `main`. A build filter limits rebuilds to the image inputs. Render does not see pushes, because the repository is linked by URL without the Render GitHub app, so a deploy is triggered by hand after merging into `main`.
+- **Branches:** pull requests target `dev`; `main` only receives `dev` when we deploy.
+- **Authentication:** Auth0. The PWA is a single-page application that signs in with Authorization Code and PKCE, and FastAPI validates access tokens for the audience `https://api.dogear`. Two Auth0 for AI Agents features are planned: Fine-Grained Authorization filters the semantic quote search to the user's own quotes, and Token Vault holds each user's Notion connection so the night job can export on their behalf. Notion is not among Token Vault's listed providers, so a short spike checks it as a custom OAuth connection before the export is built.
+- **Photos:** stored in Cloudflare R2 (S3-compatible object storage, free egress); the database keeps only the object key.
+- **Book API (2026-10-21):** first persistence slice is `POST /books` and `GET /books`, with required title and optional author. Every write/query is scoped to the verified Auth0 `sub`; HTTP tests cover cross-user isolation. Atlas Free, a database-scoped application user and a single-host IP rule are configured. The local API uses a lazy, bounded synchronous PyMongo client, independent of liveness/docs. PWA, cover/ISBN lookup, reading states, photos and quotes remain separate work.
+
 ## Pipeline (implemented locally on 2026-10-20, see README)
 
 1. **Page region:** the largest paper surface, with its holes filled. A thumb or the background touching the edge is never inside it.

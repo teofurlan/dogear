@@ -1,0 +1,253 @@
+import asyncio
+import time
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from threading import Barrier
+from types import SimpleNamespace
+
+import pymongo
+import pytest
+from bson import ObjectId
+from fastapi.testclient import TestClient
+
+from dogear.entrypoints.api import create_app
+
+
+@pytest.fixture
+def mongo(monkeypatch):
+    for name, value in {
+        "URI": "mongodb+srv://database.example.test/",
+        "USERNAME": "application",
+        "PASSWORD": "test-only-password",
+        "DATABASE": "test_books",
+    }.items():
+        monkeypatch.setenv(f"DOGEAR_MONGODB_{name}", value)
+    state = SimpleNamespace(rows=[], clients=[], unavailable=False, connect_delay=0)
+
+    class Cursor:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def sort(self, field, direction):
+            self.rows.sort(key=lambda row: row[field], reverse=direction < 0)
+            return self
+
+        def limit(self, count):
+            self.rows = self.rows[:count]
+            return self
+
+        def __iter__(self):
+            return iter(deepcopy(self.rows))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    class Collection:
+        def check(self):
+            with pytest.raises(RuntimeError):
+                asyncio.get_running_loop()  # SDK calls must not block the event loop.
+            if state.unavailable:
+                raise pymongo.errors.ServerSelectionTimeoutError(
+                    "private database detail"
+                )
+
+        def insert_one(self, row):
+            self.check()
+            row = {**row, "_id": ObjectId()}
+            state.rows.append(deepcopy(row))
+            return SimpleNamespace(inserted_id=row["_id"])
+
+        def find(self, query):
+            self.check()
+
+            def matches(row):
+                return all(
+                    row[key] > value["$gt"]
+                    if isinstance(value, dict)
+                    else row[key] == value
+                    for key, value in query.items()
+                )
+
+            return Cursor([row for row in state.rows if matches(row)])
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            time.sleep(state.connect_delay)
+            self.closed = False
+            state.clients.append(self)
+
+        def __getitem__(self, database):
+            return {"books": Collection()}
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(pymongo, "MongoClient", Client)
+    return state
+
+
+def headers(issue, subject):
+    return {"Authorization": f"Bearer {issue({'sub': subject})}"}
+
+
+def test_each_verified_reader_can_create_and_list_only_their_books(mongo, auth):
+    client, issue, _, _ = auth
+    alice, bob = headers(issue, "auth0|alice"), headers(issue, "auth0|bob")
+    first = client.post("/books", headers=alice, json={"title": "A quiet morning"})
+    assert first.status_code == 201
+    assert first.json() == {
+        "id": first.json()["id"],
+        "title": "A quiet morning",
+        "author": None,
+    }
+    assert ObjectId.is_valid(first.json()["id"])
+    assert client.get("/books", headers=bob).json() == []
+    second = client.post(
+        "/books", headers=bob, json={"title": "New horizons", "author": "Ada Reed"}
+    )
+    assert second.status_code == 201
+    for owner, expected in [(alice, first.json()), (bob, second.json())]:
+        response = client.get("/books", headers=owner)
+        assert response.status_code == 200
+        assert response.json() == [expected]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"title": ""},
+        {"title": "   "},
+        {"title": 12},
+        {"title": "x" * 301},
+        {"title": "Valid", "owner_sub": "auth0|bob"},
+        {"title": "Valid", "author": "   "},
+        {"title": "Valid", "author": {"$ne": None}},
+    ],
+)
+def test_rejected_book_input_leaves_the_readers_books_unchanged(mongo, auth, payload):
+    client, issue, _, _ = auth
+    owner = headers(issue, "auth0|alice")
+    saved = client.post(
+        "/books", headers=owner, json={"title": "Keep this book"}
+    ).json()
+    response = client.post("/books", headers=owner, json=payload)
+    assert response.status_code == 422
+    assert client.get("/books", headers=owner).json() == [saved]
+
+
+def test_reader_can_continue_through_a_bounded_list_without_other_readers_books(
+    mongo, auth
+):
+    client, issue, _, _ = auth
+    alice, bob = headers(issue, "auth0|alice"), headers(issue, "auth0|bob")
+    books = []
+    for title in ["First", "Second", "Third"]:
+        books.append(client.post("/books", headers=alice, json={"title": title}).json())
+        client.post("/books", headers=bob, json={"title": "Not Alice's"})
+    first = client.get("/books", headers=alice, params={"limit": 1})
+    assert first.status_code == 200
+    assert first.json() == books[:1]
+    rest = client.get(
+        "/books", headers=alice, params={"limit": 2, "after": books[0]["id"]}
+    )
+    assert rest.status_code == 200
+    assert rest.json() == books[1:]
+    for params in [{"limit": 0}, {"limit": 101}, {"after": "not-an-object-id"}]:
+        assert client.get("/books", headers=alice, params=params).status_code == 422
+    assert client.get("/books", headers=alice).json() == books
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+@pytest.mark.parametrize("kind", ["missing", "expired", "tampered"])
+def test_books_reject_unverified_callers_without_connecting(mongo, auth, method, kind):
+    client, issue, _, _ = auth
+    token = issue({"exp": 1}) if kind == "expired" else issue()
+    if kind == "tampered":
+        body, signature = token.rsplit(".", 1)
+        token = body + "." + ("A" if signature[0] != "A" else "B") + signature[1:]
+    credentials = {} if kind == "missing" else {"Authorization": f"Bearer {token}"}
+    response = client.request(
+        method, "/books", headers=credentials, json={"title": "Rejected"}
+    )
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert mongo.clients == []
+
+
+def test_unavailable_storage_is_sanitized_and_does_not_change_saved_books(mongo, auth):
+    client, issue, _, _ = auth
+    owner = headers(issue, "auth0|alice")
+    saved = client.post(
+        "/books", headers=owner, json={"title": "Keep this book"}
+    ).json()
+    mongo.unavailable = True
+    for method in ["GET", "POST"]:
+        response = client.request(
+            method, "/books", headers=owner, json={"title": "Not saved"}
+        )
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Book storage unavailable"}
+    assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/docs").status_code == 200
+    assert client.get("/me", headers=owner).json() == {"sub": "auth0|alice"}
+    mongo.unavailable = False
+    assert client.get("/books", headers=owner).json() == [saved]
+
+
+@pytest.mark.parametrize(
+    "name,value", [("PASSWORD", ""), ("URI", "https://invalid.example")]
+)
+def test_incomplete_storage_configuration_fails_closed(
+    mongo, auth, monkeypatch, name, value
+):
+    _, issue, _, _ = auth
+    monkeypatch.setenv(f"DOGEAR_MONGODB_{name}", value)
+    with TestClient(create_app()) as client:
+        owner = headers(issue, "auth0|alice")
+        for method in ["GET", "POST"]:
+            response = client.request(
+                method, "/books", headers=owner, json={"title": "Not saved"}
+            )
+            assert response.status_code == 503
+            assert response.json() == {"detail": "Book storage unavailable"}
+        assert client.get("/health").status_code == 200
+    assert mongo.clients == []
+
+
+def test_public_routes_do_not_connect_and_a_book_client_is_reused_then_closed(
+    mongo, auth
+):
+    _, issue, _, _ = auth
+    with TestClient(create_app()) as client:
+        owner = headers(issue, "auth0|alice")
+        assert client.get("/health").json() == {"status": "ok"}
+        assert client.get("/docs").status_code == 200
+        assert client.get("/me", headers=owner).json() == {"sub": "auth0|alice"}
+        assert mongo.clients == []
+        for _ in range(2):
+            assert client.get("/books", headers=owner).json() == []
+        assert len(mongo.clients) == 1
+        assert not mongo.clients[0].closed
+    assert mongo.clients[0].closed
+
+
+def test_concurrent_first_book_requests_share_one_client(mongo, auth):
+    client, issue, _, _ = auth
+    owner = headers(issue, "auth0|alice")
+    mongo.connect_delay = 0.05  # Simulate the SDK's blocking SRV setup.
+    start = Barrier(8)
+
+    def list_books(_):
+        start.wait(timeout=5)
+        return client.get("/books", headers=owner)
+
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        responses = list(workers.map(list_books, range(8)))
+    assert all(
+        response.status_code == 200 and response.json() == [] for response in responses
+    )
+    assert len(mongo.clients) == 1

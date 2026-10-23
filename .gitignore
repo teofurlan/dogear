@@ -3,6 +3,14 @@
 .atl/
 .codegraph/
 
+# Local design experiments and review captures (shipping design records are versioned)
+.impeccable/*
+!.impeccable/config.json
+!.impeccable/design.json
+!.impeccable/surfaces/
+.impeccable/surfaces/*
+!.impeccable/surfaces/web-src-app-jsx.md
+
 # Secrets
 .env
 .env.*
