@@ -1,0 +1,307 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T00:27:08.259006+00:00",
+  "title": "Design System: Dogear",
+  "extensions": {
+    "colorMeta": {
+      "catalog-paper": {
+        "role": "neutral",
+        "displayName": "Catalog Paper",
+        "canonical": "#e9e9e5",
+        "tonalRamp": [
+          "oklch(15% 0.00534 106.50)",
+          "oklch(26.43% 0.00534 106.50)",
+          "oklch(37.86% 0.00534 106.50)",
+          "oklch(49.29% 0.00534 106.50)",
+          "oklch(60.71% 0.00534 106.50)",
+          "oklch(72.14% 0.00534 106.50)",
+          "oklch(83.57% 0.00534 106.50)",
+          "oklch(95% 0.00534 106.50)"
+        ]
+      },
+      "catalog-ink": {
+        "role": "neutral",
+        "displayName": "Catalog Ink",
+        "canonical": "#191919",
+        "tonalRamp": [
+          "oklch(15% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95% 0.00000 89.88)"
+        ]
+      },
+      "catalog-red": {
+        "role": "primary",
+        "displayName": "Catalog Red",
+        "canonical": "#c8302d",
+        "tonalRamp": [
+          "oklch(15% 0.18919 26.92)",
+          "oklch(26.43% 0.18919 26.92)",
+          "oklch(37.86% 0.18919 26.92)",
+          "oklch(49.29% 0.18919 26.92)",
+          "oklch(60.71% 0.18919 26.92)",
+          "oklch(72.14% 0.18919 26.92)",
+          "oklch(83.57% 0.18919 26.92)",
+          "oklch(95% 0.18919 26.92)"
+        ]
+      },
+      "catalog-rule": {
+        "role": "neutral",
+        "displayName": "Catalog Rule",
+        "canonical": "#a7a7a1",
+        "tonalRamp": [
+          "oklch(15% 0.00851 106.61)",
+          "oklch(26.43% 0.00851 106.61)",
+          "oklch(37.86% 0.00851 106.61)",
+          "oklch(49.29% 0.00851 106.61)",
+          "oklch(60.71% 0.00851 106.61)",
+          "oklch(72.14% 0.00851 106.61)",
+          "oklch(83.57% 0.00851 106.61)",
+          "oklch(95% 0.00851 106.61)"
+        ]
+      },
+      "catalog-muted": {
+        "role": "neutral",
+        "displayName": "Catalog Muted",
+        "canonical": "#484844",
+        "tonalRamp": [
+          "oklch(15% 0.00658 106.69)",
+          "oklch(26.43% 0.00658 106.69)",
+          "oklch(37.86% 0.00658 106.69)",
+          "oklch(49.29% 0.00658 106.69)",
+          "oklch(60.71% 0.00658 106.69)",
+          "oklch(72.14% 0.00658 106.69)",
+          "oklch(83.57% 0.00658 106.69)",
+          "oklch(95% 0.00658 106.69)"
+        ]
+      },
+      "action-text": {
+        "role": "neutral",
+        "displayName": "Action Text",
+        "canonical": "#fff",
+        "tonalRamp": [
+          "oklch(15% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95% 0.00000 89.88)"
+        ]
+      },
+      "cover-ground": {
+        "role": "neutral",
+        "displayName": "Cover Ground",
+        "canonical": "#d1d0ca",
+        "tonalRamp": [
+          "oklch(15% 0.00826 98.90)",
+          "oklch(26.43% 0.00826 98.90)",
+          "oklch(37.86% 0.00826 98.90)",
+          "oklch(49.29% 0.00826 98.90)",
+          "oklch(60.71% 0.00826 98.90)",
+          "oklch(72.14% 0.00826 98.90)",
+          "oklch(83.57% 0.00826 98.90)",
+          "oklch(95% 0.00826 98.90)"
+        ]
+      },
+      "cover-image-ground": {
+        "role": "neutral",
+        "displayName": "Cover Image Ground",
+        "canonical": "#e0e5e6",
+        "tonalRamp": [
+          "oklch(15% 0.00557 211.04)",
+          "oklch(26.43% 0.00557 211.04)",
+          "oklch(37.86% 0.00557 211.04)",
+          "oklch(49.29% 0.00557 211.04)",
+          "oklch(60.71% 0.00557 211.04)",
+          "oklch(72.14% 0.00557 211.04)",
+          "oklch(83.57% 0.00557 211.04)",
+          "oklch(95% 0.00557 211.04)"
+        ]
+      },
+      "skeleton-ground": {
+        "role": "neutral",
+        "displayName": "Skeleton Ground",
+        "canonical": "#d4d4ce",
+        "tonalRamp": [
+          "oklch(15% 0.00815 106.57)",
+          "oklch(26.43% 0.00815 106.57)",
+          "oklch(37.86% 0.00815 106.57)",
+          "oklch(49.29% 0.00815 106.57)",
+          "oklch(60.71% 0.00815 106.57)",
+          "oklch(72.14% 0.00815 106.57)",
+          "oklch(83.57% 0.00815 106.57)",
+          "oklch(95% 0.00815 106.57)"
+        ]
+      },
+      "load-more-hover": {
+        "role": "neutral",
+        "displayName": "Load More Hover",
+        "canonical": "#dcdcd5",
+        "tonalRamp": [
+          "oklch(15% 0.00944 106.59)",
+          "oklch(26.43% 0.00944 106.59)",
+          "oklch(37.86% 0.00944 106.59)",
+          "oklch(49.29% 0.00944 106.59)",
+          "oklch(60.71% 0.00944 106.59)",
+          "oklch(72.14% 0.00944 106.59)",
+          "oklch(83.57% 0.00944 106.59)",
+          "oklch(95% 0.00944 106.59)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Mobile page heading."
+      },
+      "display-desktop": {
+        "displayName": "Display Desktop",
+        "purpose": "Page heading from 820px."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Home identity."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Signed-out panel heading."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Book title using the bundled 700-weight display face."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Operational copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Author metadata."
+      },
+      "count": {
+        "displayName": "Count",
+        "purpose": "Tabular book count."
+      },
+      "footer": {
+        "displayName": "Footer",
+        "purpose": "Attribution."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "cover-arrival",
+        "value": "180ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "Cover image opacity from .65 to 1; no cell movement."
+      },
+      {
+        "name": "page-scroll",
+        "value": "smooth",
+        "purpose": "HTML scroll behavior; auto under reduced motion."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Animation and transition durations; one iteration under prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "three-columns",
+        "value": "560px"
+      },
+      {
+        "name": "four-columns",
+        "value": "820px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The signed-out sign-in action.",
+      "html": "<button class=\"ds-primary\">Sign in to library</button>",
+      "css": ".ds-primary {font-family: var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size: .94rem; line-height: 1.5; cursor: pointer; min-height:48px; padding:.65rem 1rem; border:1px solid var(--catalog-ink, #191919); background:var(--catalog-red, #c8302d); color:#fff; font-weight:600; } .ds-primary:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-primary:disabled { cursor:wait; opacity:.65; }"
+    },
+    {
+      "name": "Text action",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Account and retry actions; retry adds semibold weight.",
+      "html": "<button class=\"ds-text\">Sign out</button>",
+      "css": ".ds-text {font-family: var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size: .94rem; line-height: 1.5; cursor: pointer; min-height:44px; padding:.45rem .2rem; border:0; background:transparent; color:var(--catalog-ink, #191919); text-decoration:underline; text-decoration-color:var(--catalog-red, #c8302d); text-underline-offset:.3em; } .ds-text:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-text:disabled { cursor:wait; opacity:.65; }"
+    },
+    {
+      "name": "Load more",
+      "kind": "button",
+      "refersTo": "button-load-more",
+      "description": "Outlined pagination action with tonal hover.",
+      "html": "<button class=\"ds-more\">Load more books</button>",
+      "css": ".ds-more {font-family: var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size: .94rem; line-height: 1.5; cursor: pointer; display:block; min-height:48px; padding:.7rem 1.25rem; border:1px solid var(--catalog-ink, #191919); background:transparent; color:var(--catalog-ink, #191919); } .ds-more:hover { background:#dcdcd5; } .ds-more:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-more:disabled { cursor:wait; opacity:.65; }"
+    },
+    {
+      "name": "Header navigation",
+      "kind": "nav",
+      "refersTo": "wordmark",
+      "description": "Compact identity and direct account action.",
+      "html": "<nav class=\"ds-header\" aria-label=\"Account\"><a class=\"ds-wordmark\" href=\"#\" aria-label=\"Dogear home\">dogear<span>.</span></a><button class=\"ds-account\">Sign out</button></nav>",
+      "css": ".ds-header { display:flex; align-items:center; justify-content:space-between; min-height:4.35rem; border-bottom:1px solid var(--catalog-ink, #191919); color:var(--catalog-ink, #191919); } .ds-wordmark { font-family:var(--catalog-display, \"Barlow Condensed\", \"Arial Narrow\", sans-serif); font-size:1.75rem; font-weight:700; letter-spacing:-.035em; line-height:1; color:inherit; text-decoration:none; } .ds-wordmark span { color:var(--catalog-red, #c8302d); } .ds-account {font-family: var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size: .94rem; line-height: 1.5; cursor: pointer; min-height:44px; padding:.45rem .2rem; background:transparent; border:0; color:inherit; text-decoration:underline; text-decoration-color:var(--catalog-red, #c8302d); text-underline-offset:.3em; } .ds-wordmark:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-account:focus-visible { outline: 3px solid var(--catalog-red, #c8302d); outline-offset: 4px; } .ds-account:disabled { cursor:wait; opacity:.65; } @media(min-width:820px) { .ds-header { min-height:5rem; } }"
+    },
+    {
+      "name": "Book cell",
+      "kind": "card",
+      "refersTo": "book-cell",
+      "description": "Source-derived fallback cell; this sample is explicitly synthetic.",
+      "html": "<article class=\"ds-book\"><div class=\"ds-cover\"><span class=\"ds-fallback-title\">Sample book</span><span class=\"ds-fallback-note\">No cover available</span></div><div class=\"ds-copy\"><h2 class=\"ds-title\">Sample book</h2><p class=\"ds-author\">Sample author</p></div></article>",
+      "css": ".ds-book { width:180px; padding:.65rem; border-right:1px solid var(--catalog-rule, #a7a7a1); border-bottom:1px solid var(--catalog-rule, #a7a7a1); color:var(--catalog-ink, #191919); background:transparent; } .ds-cover { aspect-ratio:2/3; padding:.7rem; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; background:#d1d0ca; font-family:var(--catalog-display, \"Barlow Condensed\", \"Arial Narrow\", sans-serif); line-height:1.08; } .ds-fallback-title { max-width:13ch; font-size:1.45rem; font-weight:700; overflow-wrap:anywhere; } .ds-fallback-note { max-width:18ch; font-family:var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size:.68rem; line-height:1.35; overflow-wrap:anywhere; } .ds-copy { padding-top:.55rem; } .ds-title { margin:0; font-family:var(--catalog-display, \"Barlow Condensed\", \"Arial Narrow\", sans-serif); font-size:1.25rem; font-weight:600; line-height:1.08; overflow-wrap:anywhere; } .ds-author { margin:.28rem 0 0; font-family:var(--catalog-body, \"Public Sans\", Arial, sans-serif); font-size:.77rem; line-height:1.35; color:var(--catalog-muted, #484844); overflow-wrap:anywhere; } @media(min-width:560px) { .ds-book { padding:.8rem; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Small-press catalog",
+    "overview": "An independent book-fair catalog gives Dogear a compact, readable index: cool off-white ground, condensed black type, registered cells and restrained red punctuation. The material is expressed through typography and rules, not simulated paper texture.\n\nThe interface stays direct and quiet around the books. Self-hosted type, plain account actions and honest missing-data states carry the identity without invented reader activity or decorative imagery. This records the shipped library, not the richer reference board's search, maps, chips or illustrations.",
+    "keyCharacteristics": [
+      "Condensed display type paired with open, readable body text.",
+      "A continuous cool ground divided by fine rules.",
+      "Red reserved for punctuation, the primary action and interaction cues.",
+      "Stable portrait cover slots with full bibliographic labels."
+    ],
+    "rules": [
+      {
+        "name": "The Red Punctuation Rule",
+        "body": "Use red where the implementation assigns emphasis or interaction; leave the catalog ground and cell structure neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Keep condensed type for identity and bibliographic/display headings; keep explanatory copy and controls in Public Sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Registered Ground Rule",
+        "body": "Separate catalog regions with rules and spacing, not elevated cards.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** preserve the condensed-heading and readable-body pairing.",
+      "**Do** use shared rules and the continuous paper ground to organize regions.",
+      "**Do** retain full title and author labels beneath stable portrait slots.",
+      "**Do** preserve visible focus and reduced-motion behavior on new controls.",
+      "**Do** distinguish loading, missing covers and genuinely empty content."
+    ],
+    "donts": [
+      "**Don't** replace the flat catalog cells with elevated dashboard cards.",
+      "**Don't** import paper textures or illustrations from the world references as if they shipped.",
+      "**Don't** treat populated mock books or counts as real account evidence.",
+      "**Don't** add unsupported inputs, chips or icon navigation to the recorded primitive set."
+    ]
+  }
+}
