@@ -1,5 +1,6 @@
 """Cloudflare R2 page photos through its S3-compatible API."""
 
+import logging
 import os
 from dataclasses import dataclass, field
 from threading import Lock
@@ -9,6 +10,10 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from dogear.ports.photo_store import PhotosUnavailable
 
+NAMES = ("ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY", "BUCKET")
+
+log = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class R2Config:
@@ -17,21 +22,31 @@ class R2Config:
     secret_access_key: str = field(repr=False)
     bucket: str
 
+    @staticmethod
+    def _values() -> list[str]:
+        return [os.getenv(f"DOGEAR_R2_{name}", "").strip() for name in NAMES]
+
     @classmethod
-    def from_environment(cls) -> "R2Config | None":
-        values = [
-            os.getenv(f"DOGEAR_R2_{name}", "").strip()
-            for name in ("ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY", "BUCKET")
-        ]
-        if not all(values):
-            return None
+    def problem(cls) -> str | None:
+        """Why the environment gives no photo storage, without revealing any value."""
+        values = cls._values()
+        missing = [f"DOGEAR_R2_{name}" for name, value in zip(NAMES, values) if not value]
+        if missing:
+            return "missing " + ", ".join(missing)
         try:
             endpoint = urlsplit(values[0])
         except ValueError:
-            return None
+            return "DOGEAR_R2_ENDPOINT is not a URL"
         if endpoint.scheme != "https" or not endpoint.hostname:
-            return None
-        return cls(*values)
+            return "DOGEAR_R2_ENDPOINT must be an https URL"
+        if endpoint.path.strip("/"):
+            # The bucket goes in DOGEAR_R2_BUCKET; a path here breaks request signing.
+            return "DOGEAR_R2_ENDPOINT must not include a path such as the bucket name"
+        return None
+
+    @classmethod
+    def from_environment(cls) -> "R2Config | None":
+        return None if cls.problem() else cls(*cls._values())
 
 
 class R2Photos:
@@ -67,24 +82,31 @@ class R2Photos:
             self._s3().put_object(
                 Bucket=self.config.bucket, Key=key, Body=data, ContentType="image/jpeg"
             )
-        except (BotoCoreError, ClientError, OSError):
-            raise PhotosUnavailable() from None
+        except (BotoCoreError, ClientError, OSError) as error:
+            raise _unavailable("put", error) from None
 
     def get(self, key: str) -> bytes:
         try:
             response = self._s3().get_object(Bucket=self.config.bucket, Key=key)
             return response["Body"].read()
-        except (BotoCoreError, ClientError, OSError, KeyError):
-            raise PhotosUnavailable() from None
+        except (BotoCoreError, ClientError, OSError, KeyError) as error:
+            raise _unavailable("get", error) from None
 
     def delete(self, key: str) -> None:
         try:
             self._s3().delete_object(Bucket=self.config.bucket, Key=key)
-        except (BotoCoreError, ClientError, OSError):
-            raise PhotosUnavailable() from None
+        except (BotoCoreError, ClientError, OSError) as error:
+            raise _unavailable("delete", error) from None
 
     def close(self) -> None:
         with self._lock:
             if self._client is not None:
                 self._client.close()
                 self._client = None
+
+
+def _unavailable(operation: str, error: Exception) -> PhotosUnavailable:
+    # Only the error code or class: messages can carry endpoints and request details.
+    code = error.response.get("Error", {}).get("Code") if isinstance(error, ClientError) else None
+    log.warning("R2 %s failed: %s", operation, code or type(error).__name__)
+    return PhotosUnavailable()
