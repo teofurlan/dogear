@@ -90,3 +90,24 @@ def test_storage_failures_are_sanitized(env, error):
         with pytest.raises(PhotosUnavailable) as raised:
             call()
         assert "private" not in str(raised.value)
+
+
+def test_a_missing_variable_is_named_so_the_operator_can_fix_it(env):
+    env.delenv("DOGEAR_R2_BUCKET")
+    assert R2Config.problem() == "missing DOGEAR_R2_BUCKET"
+    env.setenv("DOGEAR_R2_BUCKET", "dogear")
+    assert R2Config.problem() is None
+
+
+def test_an_endpoint_that_includes_the_bucket_path_is_rejected_and_explained(env):
+    env.setenv("DOGEAR_R2_ENDPOINT", "https://acct.r2.cloudflarestorage.com/dogear")
+    assert R2Config.from_environment() is None
+    assert "path" in R2Config.problem()
+
+
+def test_storage_failures_log_their_code_but_not_the_message(env, caplog):
+    store, client = photos(env)
+    client.error = ClientError({"Error": {"Code": "AccessDenied", "Message": "private"}}, "Put")
+    with pytest.raises(PhotosUnavailable):
+        store.put("k", b"x")
+    assert "AccessDenied" in caplog.text and "private" not in caplog.text

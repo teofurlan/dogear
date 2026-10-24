@@ -37,3 +37,10 @@ def test_factory_creates_independent_apps():
         assert first_client.get("/first-only").status_code == 200
         assert second_client.get("/first-only").status_code == 404
         assert second_client.get("/health").json() == {"status": "ok"}
+
+
+def test_an_app_without_photo_storage_says_which_variable_is_missing(monkeypatch, caplog):
+    for name in ("ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY", "BUCKET"):
+        monkeypatch.delenv(f"DOGEAR_R2_{name}", raising=False)
+    create_app()
+    assert "page photo storage disabled: missing DOGEAR_R2_ENDPOINT" in caplog.text
