@@ -1,6 +1,7 @@
 """HTTP entrypoint. Extraction stays in the separate CLI and night job."""
 
 import asyncio
+import logging
 import contextlib
 from contextlib import asynccontextmanager
 from threading import BoundedSemaphore
@@ -143,6 +144,8 @@ def photo_store(request: Request) -> PhotoStore:
     return store
 
 
+log = logging.getLogger(__name__)
+
 async def health() -> dict[str, str]:
     """Report HTTP liveness, not database, storage or model readiness."""
     return {"status": "ok"}
@@ -155,6 +158,8 @@ def create_app() -> FastAPI:
     captures = MongoCaptures(mongo_config) if mongo_config else None
     r2_config = R2Config.from_environment()
     photos = R2Photos(r2_config) if r2_config else None
+    if photos is None:
+        log.warning("page photo storage disabled: %s", R2Config.problem())
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
