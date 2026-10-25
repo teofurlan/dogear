@@ -192,12 +192,6 @@ a:focus-visible {
   cursor: default;
 }
 
-.quote-error {
-  color: var(--catalog-red);
-  font-weight: 600;
-  margin-top: 0.4rem;
-}
-
 .intro-copy {
   max-width: 42ch;
   margin: 0.7rem 0 0;

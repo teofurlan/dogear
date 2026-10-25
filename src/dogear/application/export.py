@@ -80,4 +80,3 @@ def export_csv(book_quotes: list[dict[str, Any]]) -> str:
             writer.writerow([title, author, quote_text])
 
     return output.getvalue()
-
