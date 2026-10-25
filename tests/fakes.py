@@ -39,6 +39,7 @@ class FakePhotos:
 class FakeCaptures:
     def __init__(self):
         self.books: set[tuple[str, str]] = set()
+        self.book_details: dict[tuple[str, str], dict] = {}
         self.pages: list[dict] = []
         self.quotes: list[dict] = []
         self.unavailable = False
@@ -53,8 +54,14 @@ class FakeCaptures:
         self._clock += timedelta(seconds=1)
         return self._clock
 
-    def add_book(self, owner, book_id):
+    def add_book(self, owner, book_id, title="Test book", author=None):
         self.books.add((owner, book_id))
+        self.book_details[(owner, book_id)] = {
+            "id": book_id,
+            "title": title,
+            "author": author,
+            "has_cover_photo": False,
+        }
 
     def add_page(self, owner, book_id, status="pending", attempts=0, claimed_at=None):
         page = {
@@ -121,6 +128,25 @@ class FakeCaptures:
     def owns_book(self, owner, book_id):
         self._check()
         return (owner, book_id) in self.books
+
+    def get_book(self, owner, book_id):
+        self._check()
+        if (owner, book_id) not in self.books:
+            return None
+        return self.book_details.get(
+            (owner, book_id),
+            {"id": book_id, "title": "Test book", "author": None, "has_cover_photo": False},
+        )
+
+    def list_books_for_export(self, owner, book_ids=None):
+        self._check()
+        target_ids = set(book_ids) if book_ids is not None else None
+        results = []
+        for (b_owner, b_id), book in self.book_details.items():
+            if b_owner == owner:
+                if target_ids is None or b_id in target_ids:
+                    results.append(book)
+        return results
 
     def create_page(self, owner, book_id, page_id, key):
         self._check()

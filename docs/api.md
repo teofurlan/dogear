@@ -84,6 +84,7 @@ These routes need the MongoDB variables; only the page upload also needs R2.
 | `POST /books/{book_id}/pages` | Raw `image/jpeg` or `image/png` body, same limits and errors as `/books/identify` | `201` `{"id","book_id","status":"pending","created_at"}`; `503` without R2 |
 | `GET /books/{book_id}/pages` | | `200`, your pages of the book, newest first (no photo bytes) |
 | `GET /quotes` | Optional `book_id`, `status` (`pending` or `kept`) | `200`, `[{"id","book_id","page_id","text","flags","status","has_crop","created_at"}]`, oldest first |
+| `GET /quotes/export` | Optional `book_id` | `200`, `text/markdown; charset=utf-8` file with `Content-Disposition: attachment`; `404` for unknown or other-owner `book_id` |
 | `GET /quotes/{id}/crop` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` when absent |
 | `PATCH /quotes/{id}` | `{"text"?, "status"?: "kept"}`, text 1-5000 characters | `200`, the quote |
 | `DELETE /quotes/{id}` | | `204` |

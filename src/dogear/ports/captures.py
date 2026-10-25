@@ -18,6 +18,12 @@ class CapturesUnavailable(Exception):
 class CaptureStore(Protocol):
     def owns_book(self, owner: str, book_id: str) -> bool: ...
 
+    def get_book(self, owner: str, book_id: str) -> dict[str, Any] | None: ...
+
+    def list_books_for_export(
+        self, owner: str, book_ids: Collection[str] | None = None
+    ) -> list[dict[str, Any]]: ...
+
     def create_page(
         self, owner: str, book_id: str, page_id: str, key: str
     ) -> dict[str, Any]:

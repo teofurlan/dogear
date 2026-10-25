@@ -32,6 +32,11 @@ def test_a_book_belongs_only_to_its_owner(db, store):
     assert not store.owns_book("bob", book)
     assert not store.owns_book("alice", str(ObjectId()))
     assert not store.owns_book("alice", "not-an-object-id")
+    fetched = store.get_book("alice", book)
+    assert fetched is not None and fetched["id"] == book and fetched["title"] == "T"
+    assert store.get_book("bob", book) is None
+    assert store.get_book("alice", str(ObjectId())) is None
+    assert store.get_book("alice", "not-an-id") is None
 
 
 def test_pages_are_created_pending_and_listed_newest_first_for_their_owner(store):

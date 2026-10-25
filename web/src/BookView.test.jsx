@@ -21,6 +21,8 @@ vi.mock('./PageCapture.jsx', () => ({
   )
 }));
 vi.mock('./QuoteReview.jsx', () => ({default: ({bookId, onSessionExpired}) => <div>review {bookId} <button onClick={onSessionExpired}>expire quote</button></div>}));
+vi.mock('./export.js', () => ({exportBookQuotes: vi.fn()}));
+import {exportBookQuotes} from './export.js';
 const book = {id: '000000000000000000000001', title: 'A quiet afternoon', author: 'Ada Reed'};
 
 beforeEach(() => {
@@ -99,4 +101,31 @@ test('registers beforeunload handler while uploading and unregisters when stoppe
 
   addSpy.mockRestore();
   removeSpy.mockRestore();
+});
+
+test('clicking export quotes triggers exportBookQuotes', async () => {
+  const getToken = async () => 't';
+  exportBookQuotes.mockResolvedValueOnce();
+  render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
+  const button = screen.getByRole('button', {name: 'Export quotes'});
+  await userEvent.click(button);
+  expect(exportBookQuotes).toHaveBeenCalledWith(getToken, book.id);
+});
+
+test('a 401 during export shows the shared session-ended notice', async () => {
+  const getToken = async () => 't';
+  exportBookQuotes.mockRejectedValueOnce({status: 401});
+  render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
+  await userEvent.click(screen.getByRole('button', {name: 'Export quotes'}));
+  expect(await screen.findByText('Your session ended. Sign in again to continue.')).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Sign in again'})).toBeInTheDocument();
+});
+
+test('export quotes displays generic error on failure', async () => {
+  const getToken = async () => 't';
+  exportBookQuotes.mockRejectedValueOnce(new Error('fail'));
+  render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
+  const button = screen.getByRole('button', {name: 'Export quotes'});
+  await userEvent.click(button);
+  expect(await screen.findByText('Export failed. Please try again.')).toBeInTheDocument();
 });
