@@ -1,5 +1,5 @@
 import {afterEach, expect, test, vi} from 'vitest';
-import {createBook, identifyBook} from './book-entry.js';
+import {createBook, identifyBook, isValidLine} from './book-entry.js';
 afterEach(() => vi.unstubAllGlobals());
 const book = {id:'000000000000000000000001',title:'Synthetic',author:null};
 
@@ -40,6 +40,27 @@ test('requests work on browsers without AbortSignal.any (iOS Safari before 17.4)
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
 });
 
+test('isValidLine validates line structure, box bounds, and roles', () => {
+  expect(isValidLine({text: 'Book', box: [0, 0.1, 0.9, 1], role: 'title'})).toBe(true);
+  expect(isValidLine({text: 'Author', box: [0.1, 0.2, 0.3, 0.4], role: 'author'})).toBe(true);
+  expect(isValidLine({text: 'Other', box: [0, 0, 0.5, 0.5], role: null})).toBe(true);
+  expect(isValidLine({text: 'Other', box: [0, 0, 0.5, 0.5]})).toBe(true);
+
+  expect(isValidLine(null)).toBe(false);
+  expect(isValidLine(undefined)).toBe(false);
+  expect(isValidLine({})).toBe(false);
+  expect(isValidLine({text: 123, box: [0, 0, 1, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: [0, 0, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: [0, 0, 1, 1, 0]})).toBe(false);
+  expect(isValidLine({text: 'T', box: 'not-array'})).toBe(false);
+  expect(isValidLine({text: 'T', box: [-0.01, 0, 1, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: [0, 0, 1.01, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: [0, 0, NaN, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: [0, 0, Infinity, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: ['0', 0, 1, 1]})).toBe(false);
+  expect(isValidLine({text: 'T', box: [0, 0, 1, 1], role: 'other'})).toBe(false);
+});
+
 test('identifyBook accepts valid lines and rejects malformed lines', async () => {
   const photo = new File(['photo'], 'cover.png', {type: 'image/png'});
   const valid = {
@@ -58,6 +79,18 @@ test('identifyBook accepts valid lines and rejects malformed lines', async () =>
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({title: 'Book', author: null, text: 'Book', lines: [{text: 'Line', box: [1, 2]}]})
+  }));
+  await expect(identifyBook(async () => 'token', photo)).rejects.toThrow();
+
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({title: 'Book', author: null, text: 'Book', lines: [{text: 'Line', box: [0, 0, 1.1, 1], role: 'title'}]})
+  }));
+  await expect(identifyBook(async () => 'token', photo)).rejects.toThrow();
+
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({title: 'Book', author: null, text: 'Book', lines: [{text: 'Line', box: [0, 0, 1, 1], role: 'publisher'}]})
   }));
   await expect(identifyBook(async () => 'token', photo)).rejects.toThrow();
 });

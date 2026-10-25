@@ -13,6 +13,17 @@ async function send(getToken, path, body, contentType, signal, timeout) {
   return response.json();
 }
 
+export function isValidLine(line) {
+  return Boolean(
+    line &&
+    typeof line.text === 'string' &&
+    Array.isArray(line.box) &&
+    line.box.length === 4 &&
+    line.box.every(n => Number.isFinite(n) && n >= 0 && n <= 1) &&
+    (line.role === null || line.role === undefined || line.role === 'title' || line.role === 'author')
+  );
+}
+
 export async function createBook(getToken, book, {signal} = {}) {
   const result = await send(getToken, '', JSON.stringify(book), 'application/json', signal, 10000);
   if (!result || !/^[a-f0-9]{24}$/i.test(result.id) || typeof result.title !== 'string' ||
@@ -26,7 +37,6 @@ export async function identifyBook(getToken, file, {signal} = {}) {
   if (!result || typeof result.title !== 'string' || result.title.length > 300 ||
       (result.author !== null && (typeof result.author !== 'string' || result.author.length > 300)) ||
       typeof result.text !== 'string' || result.text.length > 2000 ||
-      (result.lines !== undefined && (!Array.isArray(result.lines) ||
-        result.lines.some(l => !l || typeof l.text !== 'string' || !Array.isArray(l.box) || l.box.length !== 4 || !l.box.every(Number.isFinite))))) throw new BooksError(503);
+      (result.lines !== undefined && (!Array.isArray(result.lines) || !result.lines.every(isValidLine)))) throw new BooksError(503);
   return result;
 }

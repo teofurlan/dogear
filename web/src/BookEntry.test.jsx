@@ -348,11 +348,20 @@ test('no preview shown and preview cleaned up when reading fails', async () => {
 });
 
 test('no preview shown if lines is missing or empty', async () => {
-  identifyBook.mockResolvedValue({title: 'Book Only', author: null, text: 'Book Only', lines: []});
-  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
-  const photo = new File(['image'], 'cover.png', {type: 'image/png'});
-  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo]}});
-  expect(await screen.findByDisplayValue('Book Only')).toBeVisible();
+  identifyBook.mockResolvedValueOnce({title: 'Book Missing Lines', author: null, text: 'Book Missing Lines'});
+  const {unmount} = render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const photo1 = new File(['image1'], 'cover1.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo1]}});
+  expect(await screen.findByDisplayValue('Book Missing Lines')).toBeVisible();
   expect(screen.queryByAltText('Cover photo with detected text highlighted')).not.toBeInTheDocument();
-  expect(screen.getByText('Book Only')).toBeInTheDocument();
+  expect(screen.getByText('Book Missing Lines')).toBeInTheDocument();
+  unmount();
+
+  identifyBook.mockResolvedValueOnce({title: 'Book Empty Lines', author: null, text: 'Book Empty Lines', lines: []});
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const photo2 = new File(['image2'], 'cover2.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo2]}});
+  expect(await screen.findByDisplayValue('Book Empty Lines')).toBeVisible();
+  expect(screen.queryByAltText('Cover photo with detected text highlighted')).not.toBeInTheDocument();
+  expect(screen.getByText('Book Empty Lines')).toBeInTheDocument();
 });

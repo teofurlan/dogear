@@ -10,6 +10,11 @@ from pathlib import Path
 
 MAX_BYTES = 6 * 1024 * 1024
 MAX_PIXELS = 20_000_000
+TITLE_RATIO = 0.8
+AUTHOR_RATIO = 0.45
+MAX_LINES = 200
+MAX_TEXT_LENGTH = 2000
+MAX_FIELD_LENGTH = 300
 
 
 # Tesseract needs to find itself and its data, nothing else from the service.
@@ -34,7 +39,7 @@ class CoverError(Exception):
         self.status, self.message = status, message
 
 
-def suggest(tsv: str, width: int = 1, height: int = 1) -> dict:
+def suggest(tsv: str, width: int, height: int) -> dict:
     lines = defaultdict(list)
     for row in csv.DictReader(StringIO(tsv), delimiter="\t"):
         if row.get("level") != "5" or not row.get("text", "").strip():
@@ -48,25 +53,17 @@ def suggest(tsv: str, width: int = 1, height: int = 1) -> dict:
         text = " ".join(row["text"].strip() for row in rows)
         if any(char.isalpha() for char in text):
             ranked.append((max(int(row["height"]) for row in rows), text, rows))
-    text = "\n".join(line for _, line, _ in ranked)[:2000]
+    text = "\n".join(line for _, line, _ in ranked)[:MAX_TEXT_LENGTH]
     if not ranked:
         return {"title": "", "author": None, "text": text, "lines": []}
     largest = max(height for height, _, _ in ranked)
-    title = " ".join(
-        line for height, line, _ in ranked if height >= largest * 0.8
-    )[:300]
     others = [
-        (height, idx, line)
-        for idx, (height, line, _) in enumerate(ranked)
-        if largest * 0.45 <= height < largest * 0.8
+        (line_height, idx)
+        for idx, (line_height, _, _) in enumerate(ranked)
+        if largest * AUTHOR_RATIO <= line_height < largest * TITLE_RATIO
     ]
-    author_choice = max(others, default=(0, None, None), key=lambda item: item[0])
+    author_choice = max(others, default=(0, None), key=lambda item: item[0])
     author_idx = author_choice[1]
-    author = author_choice[2]
-    if author:
-        author = (
-            author.removeprefix("by ").removeprefix("By ").removeprefix("por ")[:300]
-        )
 
     def scaled(value: int, size: int) -> float:
         return min(1.0, max(0.0, round(value / max(1, size), 4)))
@@ -74,27 +71,43 @@ def suggest(tsv: str, width: int = 1, height: int = 1) -> dict:
     def number(row: dict, key: str) -> int:
         return int(row.get(key) or 0)
 
-    out_lines = []
-    for idx, (line_height, line_text, rows) in enumerate(ranked[:200]):
-        left = min(number(row, "left") for row in rows)
-        top = min(number(row, "top") for row in rows)
-        right = max(number(row, "left") + number(row, "width") for row in rows)
-        bottom = max(number(row, "top") + number(row, "height") for row in rows)
-        if line_height >= largest * 0.8:
+    classified = []
+    for idx, (line_height, line_text, rows) in enumerate(ranked):
+        if line_height >= largest * TITLE_RATIO:
             role = "title"
         elif idx == author_idx:
             role = "author"
         else:
             role = None
+        classified.append((role, line_text, rows))
+
+    title = " ".join(
+        line_text for role, line_text, _ in classified if role == "title"
+    )[:MAX_FIELD_LENGTH]
+    author_line = next(
+        (line_text for role, line_text, _ in classified if role == "author"),
+        None,
+    )
+    author = (
+        author_line.removeprefix("by ").removeprefix("By ").removeprefix("por ")[:MAX_FIELD_LENGTH]
+        if author_line
+        else None
+    )
+
+    out_lines = []
+    for role, line_text, rows in classified[:MAX_LINES]:
+        left = max(0, min(width, min(number(row, "left") for row in rows)))
+        top = max(0, min(height, min(number(row, "top") for row in rows)))
+        right = max(left, min(width, max(number(row, "left") + number(row, "width") for row in rows)))
+        bottom = max(top, min(height, max(number(row, "top") + number(row, "height") for row in rows)))
+        norm_x = scaled(left, width)
+        norm_y = scaled(top, height)
+        norm_w = min(round(1.0 - norm_x, 4), scaled(right - left, width))
+        norm_h = min(round(1.0 - norm_y, 4), scaled(bottom - top, height))
         out_lines.append(
             {
                 "text": line_text,
-                "box": [
-                    scaled(left, width),
-                    scaled(top, height),
-                    scaled(right - left, width),
-                    scaled(bottom - top, height),
-                ],
+                "box": [norm_x, norm_y, norm_w, norm_h],
                 "role": role,
             }
         )
