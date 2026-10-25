@@ -30,3 +30,12 @@ test('invalid photos and cancelled token acquisition send no request', async () 
   await expect(createBook(async()=> 'token', book, {signal:controller.signal})).rejects.toThrow();
   expect(fetch).not.toHaveBeenCalled();
 });
+
+test('requests work on browsers without AbortSignal.any (iOS Safari before 17.4)', async () => {
+  vi.stubGlobal('AbortSignal', {timeout: AbortSignal.timeout.bind(AbortSignal)});
+  const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({id: '000000000000000000000001', title: 'T', author: null})});
+  vi.stubGlobal('fetch', fetch);
+  await createBook(async () => 'tok', {title: 'T', author: null}).catch(() => {});
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+});

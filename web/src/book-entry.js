@@ -1,4 +1,5 @@
 import {BooksError} from './books.js';
+import {anySignal} from './signals.js';
 
 async function send(getToken, path, body, contentType, signal, timeout) {
   const token = await getToken({timeoutInSeconds: 10});
@@ -6,7 +7,7 @@ async function send(getToken, path, body, contentType, signal, timeout) {
   const response = await fetch('/api/books' + path, {
     method: 'POST', body, headers: {Authorization: `Bearer ${token}`, 'Content-Type': contentType},
     credentials: 'omit', cache: 'no-store',
-    signal: AbortSignal.any([signal, AbortSignal.timeout(timeout)].filter(Boolean))
+    signal: anySignal([signal, AbortSignal.timeout(timeout)].filter(Boolean))
   });
   if (!response.ok) throw new BooksError(response.status);
   return response.json();

@@ -66,3 +66,8 @@ test('no banner when nothing is waiting, and a failed lookup stays silent', asyn
   await waitFor(() => expect(listQuotes).toHaveBeenCalledTimes(2));
   expect(screen.queryByText(/waiting for review/)).not.toBeInTheDocument();
 });
+
+test('each book link is named by its title and author, not by its cover placeholder', async () => {
+  render(<App />);
+  expect(await screen.findByRole('link', {name: 'A quiet afternoon by Ada Reed'})).toBeInTheDocument();
+});
