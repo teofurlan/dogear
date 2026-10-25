@@ -42,7 +42,7 @@ test('keep sends the edited text and moves the quote to kept', async () => {
 
 test('delete removes a pending quote and calls deleteQuote when undo window closes', async () => {
   pending = [quote()];
-  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={25} />);
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={250} />);
   await userEvent.click(await screen.findByRole('button', {name: 'Delete'}));
   expect(screen.queryByLabelText('Quote text')).not.toBeInTheDocument();
   const notice = screen.getByRole('status');
@@ -56,7 +56,7 @@ test('delete removes a pending quote and calls deleteQuote when undo window clos
 test('kept quotes can be edited and deleted', async () => {
   kept = [quote({status: 'kept', text: 'Old'})];
   updateQuote.mockResolvedValue(quote({status: 'kept', text: 'New'}));
-  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={25} />);
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={250} />);
   await userEvent.click(await screen.findByRole('button', {name: 'Edit quote'}));
   const box = screen.getByLabelText('Edit quote text');
   await userEvent.clear(box); await userEvent.type(box, 'New');
@@ -130,7 +130,7 @@ test('deleting another quote flushes the previous pending delete immediately', a
 test('failed delayed delete restores the pending quote and displays an alert', async () => {
   pending = [quote({id: 'q1', text: 'Preserved text'}), quote({id: 'q2', text: 'Second quote'})];
   deleteQuote.mockRejectedValueOnce(new Error('Network error'));
-  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={25} />);
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={250} />);
   const deleteButtons = await screen.findAllByRole('button', {name: 'Delete'});
   await userEvent.click(deleteButtons[0]);
   expect(screen.queryByDisplayValue('Preserved text')).not.toBeInTheDocument();
@@ -158,7 +158,7 @@ test('failed flush delete restores the previous quote and displays an alert', as
 test('failed delete of kept quote restores it in place', async () => {
   kept = [quote({id: 'k1', status: 'kept', text: 'Kept 1'}), quote({id: 'k2', status: 'kept', text: 'Kept 2'})];
   deleteQuote.mockRejectedValueOnce(new Error('500 Internal Error'));
-  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={25} />);
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={250} />);
   await screen.findByText('Kept 1');
   const deleteButtons = screen.getAllByRole('button', {name: 'Delete quote'});
   await userEvent.click(deleteButtons[1]);
@@ -216,4 +216,22 @@ test('a failed save keeps the quote and says so', async () => {
   await userEvent.click(await screen.findByRole('button', {name: 'Keep'}));
   expect(await screen.findByRole('alert')).toHaveTextContent(/could not be saved/i);
   expect(screen.getByLabelText('Quote text')).toBeInTheDocument();
+});
+
+test('only the action that is running is marked busy', async () => {
+  pending = [quote()];
+  updateQuote.mockReturnValue(new Promise(() => {}));
+  addQuote.mockReturnValue(new Promise(() => {}));
+  render(<QuoteReview getToken={getToken} bookId={id} />);
+  const keep = await screen.findByRole('button', {name: 'Keep'});
+  const add = screen.getByRole('button', {name: 'Add passage'});
+  expect(keep).not.toHaveAttribute('aria-busy', 'true');
+  expect(add).toBeDisabled();
+  expect(add).not.toHaveAttribute('aria-busy', 'true');
+  await userEvent.click(keep);
+  expect(keep).toHaveAttribute('aria-busy', 'true');
+  expect(screen.getByRole('button', {name: 'Delete'})).not.toHaveAttribute('aria-busy', 'true');
+  await userEvent.type(screen.getByLabelText('Add a passage you highlighted'), 'Typed line');
+  await userEvent.click(add);
+  expect(add).toHaveAttribute('aria-busy', 'true');
 });

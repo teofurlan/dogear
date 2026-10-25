@@ -22,13 +22,36 @@ test('library headings can wrap around their count on narrow screens', () => {
   expect(rule('.catalog-count').getPropertyValue('font-variant-numeric')).toBe('tabular-nums');
 });
 
-test('control feedback excludes disabled buttons and preserves their wait cursor', () => {
+test('control feedback excludes disabled buttons and preserves their cursor states', () => {
   expect(rule('.login-panel button:hover:not(:disabled)')?.getPropertyValue('background')).toBeTruthy();
   expect(rule('.login-panel button:active:not(:disabled)')?.getPropertyValue('background')).toBeTruthy();
   expect(rule('.load-more:hover:not(:disabled)')?.getPropertyValue('background')).toBe('rgb(220, 220, 213)');
-  expect(rule('button:disabled').getPropertyValue('cursor')).toBe('wait');
+  expect(rule('button:disabled').getPropertyValue('cursor')).toBe('not-allowed');
   expect(rule('.login-panel button').getPropertyValue('cursor')).toBe('');
   expect(rule('.signout-button, .retry-button').getPropertyValue('cursor')).toBe('');
+});
+
+test('disabled buttons use not-allowed cursor by default and wait cursor only when busy', () => {
+  expect(rule('button:disabled').getPropertyValue('cursor')).toBe('not-allowed');
+  expect(rule('button[aria-busy="true"]').getPropertyValue('cursor')).toBe('wait');
+
+  const doc = dom.window.document;
+  const button = doc.createElement('button');
+  doc.body.appendChild(button);
+
+  button.disabled = true;
+  expect(dom.window.getComputedStyle(button).cursor).toBe('not-allowed');
+
+  button.setAttribute('aria-busy', 'true');
+  expect(dom.window.getComputedStyle(button).cursor).toBe('wait');
+
+  button.disabled = false;
+  expect(dom.window.getComputedStyle(button).cursor).toBe('wait');
+
+  button.removeAttribute('aria-busy');
+  expect(dom.window.getComputedStyle(button).cursor).toBe('pointer');
+
+  button.remove();
 });
 
 test('book titles request the bundled display weight rather than an unavailable face', () => {

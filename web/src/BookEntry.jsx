@@ -98,7 +98,7 @@ export default function BookEntry({getToken, onCreated}) {
       <label htmlFor="book-author">Author <span className="field-help">(optional)</span></label>
       <input id="book-author" name="author" value={author} onChange={event => setAuthor(event.target.value)} maxLength={300} disabled={status !== 'idle'} />
       {error ? <p role="alert">{error}</p> : null}
-      <div className="entry-actions"><button type="submit" disabled={status !== 'idle' || !title.trim()}>{status === 'saving' ? 'Saving book…' : 'Save book'}</button><button type="button" className="cancel-button" onClick={close} disabled={status === 'saving'}>Cancel</button></div>
+      <div className="entry-actions"><button type="submit" disabled={status !== 'idle' || !title.trim()} aria-busy={status !== 'idle'}>{status === 'saving' ? 'Saving book…' : 'Save book'}</button><button type="button" className="cancel-button" onClick={close} disabled={status === 'saving'}>Cancel</button></div>
     </form> : null}
   </section>;
 }

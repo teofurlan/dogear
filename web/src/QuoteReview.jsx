@@ -51,7 +51,7 @@ function PendingQuote({getToken, quote, onKept, onDeleted}) {
     <textarea id={`quote-${quote.id}`} rows={4} maxLength={5000} value={text} onChange={event => setText(event.target.value)} disabled={busy} />
     {error ? <p role="alert" className="quote-error">{error}</p> : null}
     <div className="quote-actions">
-      <button type="button" className="primary" disabled={busy || !text.trim()} onClick={() => run(async () => onKept(await updateQuote(getToken, quote.id, {text: text.trim(), status: 'kept'})))}>Keep</button>
+      <button type="button" className="primary" disabled={busy || !text.trim()} aria-busy={busy} onClick={() => run(async () => onKept(await updateQuote(getToken, quote.id, {text: text.trim(), status: 'kept'})))}>Keep</button>
       <button type="button" className="quiet" disabled={busy} onClick={() => onDeleted({...quote, text})}>Delete</button>
     </div>
   </li>;
@@ -75,7 +75,7 @@ function KeptQuote({getToken, quote, onChanged, onDeleted}) {
     {error ? <p role="alert" className="quote-error">{error}</p> : null}
     <div className="quote-actions">
       {editing ? <>
-        <button type="button" className="primary" disabled={busy || !text.trim()} onClick={save}>Save</button>
+        <button type="button" className="primary" disabled={busy || !text.trim()} aria-busy={busy} onClick={save}>Save</button>
         <button type="button" className="quiet" disabled={busy} onClick={() => {setEditing(false); setText(quote.text);}}>Cancel</button>
       </> : <button type="button" className="quiet" onClick={() => setEditing(true)}>Edit quote</button>}
       <button type="button" className="quiet" disabled={busy} onClick={() => onDeleted(quote)}>Delete quote</button>
@@ -204,7 +204,7 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
       <label htmlFor="add-passage">Add a passage you highlighted</label>
       <textarea id="add-passage" rows={3} maxLength={5000} value={draft} onChange={event => setDraft(event.target.value)} disabled={adding} />
       {addError ? <p role="alert" className="quote-error">{addError}</p> : null}
-      <button type="submit" className="primary" disabled={adding || !draft.trim()}>Add passage</button>
+      <button type="submit" className="primary" disabled={adding || !draft.trim()} aria-busy={adding}>Add passage</button>
     </form>
     {undo ? <div className="quote-undo" role="status" aria-live="polite">
       <span>Quote deleted.</span> <button type="button" className="quiet" onClick={restore}>Undo</button>

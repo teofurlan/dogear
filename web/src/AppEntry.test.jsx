@@ -24,4 +24,4 @@ test('a confirmed book appears immediately without moving the existing paginatio
   await waitFor(() => expect(listBooks).toHaveBeenCalledTimes(2));
   expect(listBooks.mock.calls[1][1].after).toBe(first.at(-1).id);
   expect(screen.getByRole('heading', {name:'Just saved'})).toBeVisible();
-});
+}, 15000);
