@@ -420,6 +420,45 @@ a:focus-visible {
   text-underline-offset: 0.25em;
 }
 
+.search-row {
+  margin-block: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.library-search {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--catalog-rule);
+  border-radius: 0;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color: var(--catalog-ink);
+  background: var(--catalog-paper);
+  caret-color: var(--catalog-red);
+}
+
+.library-search:focus-visible {
+  outline: 3px solid var(--catalog-red);
+  outline-offset: 2px;
+}
+
+.clear-search {
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--catalog-rule);
+  background: transparent;
+  color: var(--catalog-ink);
+  cursor: pointer;
+}
+
+.clear-search:hover {
+  background: color-mix(in srgb, var(--catalog-paper) 80%, var(--catalog-rule));
+}
+
 .catalog-footer {
   display: flex;
   flex-wrap: wrap;

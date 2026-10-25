@@ -131,3 +131,38 @@ test('returning from a book refreshes pending quote counts', async () => {
   expect(await screen.findByRole('heading', {name: 'Your library'})).toBeInTheDocument();
   await waitFor(() => expect(screen.queryByText(/to review/)).not.toBeInTheDocument());
 });
+
+test('search field queries by q with debounce and cancels stale requests', async () => {
+  const matchingBook = {id: '000000000000000000000042', title: 'Cien años', author: 'García'};
+  listBooks.mockResolvedValueOnce([book]).mockResolvedValueOnce([matchingBook]);
+  render(<App />);
+  await screen.findByRole('heading', {name: book.title});
+  const input = screen.getByRole('searchbox', {name: 'Search by title or author'});
+  await userEvent.type(input, 'García');
+  expect(await screen.findByRole('heading', {name: 'Cien años'})).toBeInTheDocument();
+  expect(listBooks).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({q: 'García'}));
+  expect(listBooks.mock.calls[0][1].signal.aborted).toBe(true);
+});
+
+test('clearing search restores the normal library', async () => {
+  const matchingBook = {id: '000000000000000000000042', title: 'Cien años', author: 'García'};
+  listBooks.mockResolvedValueOnce([book]).mockResolvedValueOnce([matchingBook]).mockResolvedValueOnce([book]);
+  render(<App />);
+  await screen.findByRole('heading', {name: book.title});
+  const input = screen.getByRole('searchbox', {name: 'Search by title or author'});
+  await userEvent.type(input, 'García');
+  expect(await screen.findByRole('heading', {name: 'Cien años'})).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', {name: 'Clear'}));
+  expect(await screen.findByRole('heading', {name: book.title})).toBeInTheDocument();
+  expect(input).toHaveValue('');
+});
+
+test('empty search results show no books found feedback', async () => {
+  listBooks.mockResolvedValueOnce([book]).mockResolvedValueOnce([]);
+  render(<App />);
+  await screen.findByRole('heading', {name: book.title});
+  const input = screen.getByRole('searchbox', {name: 'Search by title or author'});
+  await userEvent.type(input, 'Nonexistent');
+  expect(await screen.findByRole('heading', {name: 'No books found'})).toBeInTheDocument();
+  expect(screen.getByText('No books match “Nonexistent”.')).toBeInTheDocument();
+});

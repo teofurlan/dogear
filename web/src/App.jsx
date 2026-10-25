@@ -80,8 +80,23 @@ function Library({getToken, signIn}) {
 
   const [books, setBooks] = useState([]);
   const [addedBooks, setAddedBooks] = useState([]);
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearch('');
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setSearch(trimmed);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   // Newly saved books must not move the server pagination cursor past unseen books.
-  const visibleBooks = useMemo(() => [...new Map([...books, ...addedBooks].map(book => [book.id, book])).values()], [books, addedBooks]);
+  const visibleBooks = useMemo(() => search ? books : [...new Map([...books, ...addedBooks].map(book => [book.id, book])).values()], [books, addedBooks, search]);
   const [covers, setCovers] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
@@ -97,14 +112,14 @@ function Library({getToken, signIn}) {
     request.current = controller;
     busy.current = true;
     setBooks([]); setError(null); setStatus('loading');
-    listBooks(getToken, {signal: controller.signal}).then(page => {
+    listBooks(getToken, {q: search || undefined, signal: controller.signal}).then(page => {
       if (controller.signal.aborted) return;
       setBooks(page); setHasMore(page.length === PAGE_SIZE); setStatus('ready');
     }).catch(problem => {
       if (!controller.signal.aborted) {setError(problem.status === 401 ? 'session' : 'storage'); setStatus('error');}
     }).finally(() => {if (!controller.signal.aborted) busy.current = false;});
     return () => {controller.abort(); request.current?.abort();};
-  }, [getToken, retry]);
+  }, [getToken, retry, search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -136,7 +151,7 @@ function Library({getToken, signIn}) {
     const controller = new AbortController(); request.current = controller;
     setError(null); setStatus('more');
     try {
-      const page = await listBooks(getToken, {after: books.at(-1).id, signal: controller.signal});
+      const page = await listBooks(getToken, {after: books.at(-1).id, q: search || undefined, signal: controller.signal});
       if (controller.signal.aborted) return;
       setBooks(previous => [...new Map([...previous, ...page].map(book => [book.id, book])).values()]);
       setHasMore(page.length === PAGE_SIZE); setStatus('ready');
@@ -217,9 +232,23 @@ function Library({getToken, signIn}) {
       </div>
     </section> : null}
     {status !== 'loading' ? <BookEntry getToken={getToken} onCreated={book => setAddedBooks(previous => [...previous, book])} /> : null}
+    {(status !== 'loading' && (visibleBooks.length > 0 || search || query)) || search || query ? <div className="search-row">
+      <input
+        type="search"
+        className="library-search"
+        placeholder="Search by title or author"
+        aria-label="Search by title or author"
+        value={query}
+        onChange={event => setQuery(event.target.value)}
+      />
+      {query ? <button type="button" className="clear-search" onClick={() => setQuery('')}>Clear</button> : null}
+    </div> : null}
     {status === 'loading' ? <><p role="status" className="feedback">Loading your library…</p><ul className="book-grid skeleton-grid" aria-hidden="true">{[0,1,2,3].map(index => <li key={index} className="book skeleton"><div className="cover-wrap" /><div className="book-copy" /></li>)}</ul></> : null}
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
-    {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
+    {status === 'ready' && !visibleBooks.length && !error ? (
+      search ? <section className="empty-library" role="status"><h2>No books found</h2><p>No books match “{search}”.</p></section>
+        : <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section>
+    ) : null}
     {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => {
       const pendingCount = pendingByBook.get(book.id) || 0;
       return <li key={book.id} className="book">

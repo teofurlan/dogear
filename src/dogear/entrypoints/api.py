@@ -265,10 +265,11 @@ def create_app() -> FastAPI:
         books: Annotated[MongoBooks, Depends(book_store)],
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         after: Annotated[str | None, Query(pattern="^[0-9a-fA-F]{24}$")] = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
     ):
         """List own books by ascending ID; continue with the last returned ID as after."""
         try:
-            return books.list_for_owner(subject, limit, after)
+            return books.list_for_owner(subject, limit, after, q=q)
         except BooksUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
 

@@ -67,3 +67,8 @@ test('pending badge has red background and bold text', () => {
   expect(rule('.pending-badge').getPropertyValue('background')).toBe('var(--catalog-red)');
   expect(rule('.pending-badge').getPropertyValue('font-weight')).toBe('600');
 });
+
+test('library search input has catalog ink text and red caret', () => {
+  expect(rule('.library-search').getPropertyValue('color')).toBe('var(--catalog-ink)');
+  expect(rule('.library-search').getPropertyValue('caret-color')).toBe('var(--catalog-red)');
+});

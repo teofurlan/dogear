@@ -1,6 +1,8 @@
 """MongoDB book storage. Ownership always comes from a verified token subject."""
 
 import os
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
@@ -54,6 +56,32 @@ def _public_book(document: dict[str, Any]) -> dict[str, Any]:
         "author": document["author"],
         "has_cover_photo": bool(document.get("has_cover_photo", False)),
     }
+
+
+_DIACRITIC_MAP = {
+    "a": "[aáàâäãåāăą]",
+    "c": "[cçćĉċč]",
+    "e": "[eéèêëēĕėęě]",
+    "i": "[iíìîïīĭįı]",
+    "n": "[nñńņň]",
+    "o": "[oóòôöõōŏőø]",
+    "s": "[sśŝşš]",
+    "u": "[uúùûüũūŭůűų]",
+    "y": "[yýÿŷ]",
+    "z": "[zźżž]",
+}
+
+
+def _accent_insensitive_regex(query: str) -> str:
+    parts = []
+    for char in query:
+        decomposed = unicodedata.normalize("NFD", char)
+        base = decomposed[0].lower()
+        if base in _DIACRITIC_MAP:
+            parts.append(_DIACRITIC_MAP[base])
+        else:
+            parts.append(re.escape(char))
+    return "".join(parts)
 
 
 def make_client(config: MongoConfig) -> pymongo.MongoClient:
@@ -140,11 +168,17 @@ class MongoBooks:
             raise BooksUnavailable() from None
 
     def list_for_owner(
-        self, subject: str, limit: int, after: str | None
+        self, subject: str, limit: int, after: str | None, q: str | None = None
     ) -> list[dict[str, Any]]:
         query: dict[str, Any] = {"owner_sub": subject}
         if after is not None:
             query["_id"] = {"$gt": ObjectId(after)}
+        if q is not None and q.strip():
+            pattern = _accent_insensitive_regex(q.strip())
+            query["$or"] = [
+                {"title": {"$regex": pattern, "$options": "i"}},
+                {"author": {"$regex": pattern, "$options": "i"}},
+            ]
         try:
             with self._collection().find(query).sort("_id", 1).limit(limit) as cursor:
                 return [_public_book(document) for document in cursor]

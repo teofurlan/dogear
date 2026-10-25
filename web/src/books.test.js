@@ -13,6 +13,15 @@ test('book requests forward only a bearer token to the local API with bounded pa
   expect(options.credentials).toBe('omit');
 });
 
+test('listBooks appends trimmed q parameter when provided', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok:true,json:async()=>[book]});
+  vi.stubGlobal('fetch', fetch);
+  await listBooks(async () => 'access-token', {q: '  García  '});
+  expect(fetch.mock.calls[0][0]).toBe('/api/books?limit=24&q=Garc%C3%ADa');
+  await listBooks(async () => 'access-token', {q: '   '});
+  expect(fetch.mock.calls[1][0]).toBe('/api/books?limit=24');
+});
+
 test('unauthorized, unavailable and malformed replies are not accepted as library data', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:false,status:401}));
   await expect(listBooks(async () => 'token')).rejects.toMatchObject({status:401});

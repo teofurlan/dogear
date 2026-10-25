@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -63,13 +64,23 @@ def mongo(monkeypatch):
         def find(self, query):
             self.check()
 
+            def matches_clause(row, k, v):
+                if k == "$or":
+                    return any(
+                        all(matches_clause(row, subk, subv) for subk, subv in branch.items())
+                        for branch in v
+                    )
+                val = row.get(k)
+                if isinstance(v, dict):
+                    if "$gt" in v:
+                        return val is not None and val > v["$gt"]
+                    if "$regex" in v:
+                        flags = re.IGNORECASE if v.get("$options") == "i" else 0
+                        return val is not None and bool(re.search(v["$regex"], str(val), flags=flags))
+                return val == v
+
             def matches(row):
-                return all(
-                    row[key] > value["$gt"]
-                    if isinstance(value, dict)
-                    else row[key] == value
-                    for key, value in query.items()
-                )
+                return all(matches_clause(row, k, v) for k, v in query.items())
 
             return Cursor([row for row in state.rows if matches(row)])
 
@@ -309,4 +320,45 @@ def test_get_book_fails_closed_when_storage_unavailable(mongo, auth):
     assert response.status_code == 503
     assert response.json() == {"detail": "Book storage unavailable"}
     mongo.unavailable = False
+
+
+def test_list_books_search_by_title_and_author_case_and_accent_insensitive(mongo, auth):
+    client, issue, _, _ = auth
+    alice, bob = headers(issue, "auth0|alice"), headers(issue, "auth0|bob")
+    b1 = client.post(
+        "/books", headers=alice, json={"title": "Cien años de soledad", "author": "Gabriel García Márquez"}
+    ).json()
+    b2 = client.post(
+        "/books", headers=alice, json={"title": "El coronel no tiene quien le escriba", "author": "Gabriel Garcia Marquez"}
+    ).json()
+    b3 = client.post(
+        "/books", headers=alice, json={"title": "Ficciones", "author": "Jorge Luis Borges"}
+    ).json()
+    client.post(
+        "/books", headers=bob, json={"title": "Cien años de soledad", "author": "Gabriel García Márquez"}
+    )
+
+    # Search title by unaccented query matches accented title
+    res_title = client.get("/books", headers=alice, params={"q": "anos"}).json()
+    assert [b["id"] for b in res_title] == [b1["id"]]
+
+    # Search author by accented query matches unaccented and accented author
+    res_author = client.get("/books", headers=alice, params={"q": "GARCÍA"}).json()
+    assert [b["id"] for b in res_author] == [b1["id"], b2["id"]]
+
+    # Bob does not see Alice's books
+    assert client.get("/books", headers=bob, params={"q": "Borges"}).json() == []
+
+    # Pagination with q
+    p1 = client.get("/books", headers=alice, params={"q": "Gabriel", "limit": 1}).json()
+    assert len(p1) == 1
+    assert p1[0]["id"] == b1["id"]
+    p2 = client.get("/books", headers=alice, params={"q": "Gabriel", "limit": 1, "after": b1["id"]}).json()
+    assert len(p2) == 1
+    assert p2[0]["id"] == b2["id"]
+
+    # Omitting or empty q returns all books
+    assert len(client.get("/books", headers=alice).json()) == 3
+    assert len(client.get("/books", headers=alice, params={"q": ""}).json()) == 3
+
 
