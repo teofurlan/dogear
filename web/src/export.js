@@ -14,18 +14,27 @@ export function triggerDownload(blob, filename) {
   }
 }
 
-export async function exportBookQuotes(getToken, bookId, {signal} = {}) {
-  const blob = await api(getToken, `/quotes/export?book_id=${encodeURIComponent(bookId)}`, {
+export async function exportBookQuotes(getToken, bookId, formatOrOptions = 'markdown', maybeOptions = {}) {
+  const format = typeof formatOrOptions === 'string' ? formatOrOptions : (formatOrOptions?.format || 'markdown');
+  const signal = typeof formatOrOptions === 'object' ? formatOrOptions?.signal : maybeOptions?.signal;
+  const ext = format === 'csv' ? 'csv' : 'md';
+  const query = new URLSearchParams({book_id: bookId, format});
+  const blob = await api(getToken, `/quotes/export?${query.toString()}`, {
     as: 'blob',
     signal,
   });
-  triggerDownload(blob, `quotes-${bookId}.md`);
+  triggerDownload(blob, `quotes-${bookId}.${ext}`);
 }
 
-export async function exportAllQuotes(getToken, {signal} = {}) {
-  const blob = await api(getToken, '/quotes/export', {
+export async function exportAllQuotes(getToken, formatOrOptions = 'markdown', maybeOptions = {}) {
+  const format = typeof formatOrOptions === 'string' ? formatOrOptions : (formatOrOptions?.format || 'markdown');
+  const signal = typeof formatOrOptions === 'object' ? formatOrOptions?.signal : maybeOptions?.signal;
+  const ext = format === 'csv' ? 'csv' : 'md';
+  const query = new URLSearchParams({format});
+  const blob = await api(getToken, `/quotes/export?${query.toString()}`, {
     as: 'blob',
     signal,
   });
-  triggerDownload(blob, 'quotes.md');
+  triggerDownload(blob, `quotes.${ext}`);
 }
+

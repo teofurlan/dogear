@@ -1,5 +1,5 @@
 import React from 'react';
-import {render, screen} from '@testing-library/react';
+import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, expect, test, vi} from 'vitest';
 import BookView from './BookView.jsx';
@@ -103,20 +103,31 @@ test('registers beforeunload handler while uploading and unregisters when stoppe
   removeSpy.mockRestore();
 });
 
-test('clicking export quotes triggers exportBookQuotes', async () => {
+test('clicking export markdown triggers exportBookQuotes with markdown format', async () => {
   const getToken = async () => 't';
   exportBookQuotes.mockResolvedValueOnce();
   render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
-  const button = screen.getByRole('button', {name: 'Export quotes'});
+  const group = screen.getByRole('group', {name: 'Export quotes'});
+  expect(group).toBeInTheDocument();
+  const button = screen.getByRole('button', {name: 'Export Markdown'});
   await userEvent.click(button);
-  expect(exportBookQuotes).toHaveBeenCalledWith(getToken, book.id);
+  expect(exportBookQuotes).toHaveBeenCalledWith(getToken, book.id, 'markdown');
+});
+
+test('clicking export csv triggers exportBookQuotes with csv format', async () => {
+  const getToken = async () => 't';
+  exportBookQuotes.mockResolvedValueOnce();
+  render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
+  const button = screen.getByRole('button', {name: 'Export CSV'});
+  await userEvent.click(button);
+  expect(exportBookQuotes).toHaveBeenCalledWith(getToken, book.id, 'csv');
 });
 
 test('a 401 during export shows the shared session-ended notice', async () => {
   const getToken = async () => 't';
   exportBookQuotes.mockRejectedValueOnce({status: 401});
   render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
-  await userEvent.click(screen.getByRole('button', {name: 'Export quotes'}));
+  await userEvent.click(screen.getByRole('button', {name: 'Export Markdown'}));
   expect(await screen.findByText('Your session ended. Sign in again to continue.')).toBeInTheDocument();
   expect(screen.getByRole('button', {name: 'Sign in again'})).toBeInTheDocument();
 });
@@ -125,7 +136,25 @@ test('export quotes displays generic error on failure', async () => {
   const getToken = async () => 't';
   exportBookQuotes.mockRejectedValueOnce(new Error('fail'));
   render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
-  const button = screen.getByRole('button', {name: 'Export quotes'});
+  const button = screen.getByRole('button', {name: 'Export Markdown'});
   await userEvent.click(button);
   expect(await screen.findByText('Export failed. Please try again.')).toBeInTheDocument();
 });
+
+test('buttons show busy state while export is in progress', async () => {
+  const getToken = async () => 't';
+  let finishExport;
+  exportBookQuotes.mockReturnValueOnce(new Promise(resolve => { finishExport = resolve; }));
+  render(<BookView book={book} coverUrl={null} getToken={getToken} onBack={() => {}} />);
+  const mdButton = screen.getByRole('button', {name: 'Export Markdown'});
+  const csvButton = screen.getByRole('button', {name: 'Export CSV'});
+  await userEvent.click(mdButton);
+  expect(mdButton).toHaveTextContent('Exporting…');
+  expect(mdButton).toBeDisabled();
+  expect(csvButton).toBeDisabled();
+  finishExport();
+  await waitFor(() => expect(mdButton).toHaveTextContent('Export Markdown'));
+  expect(mdButton).not.toBeDisabled();
+  expect(csvButton).not.toBeDisabled();
+});
+

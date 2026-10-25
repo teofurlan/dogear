@@ -5,6 +5,7 @@ import {afterEach, beforeEach, expect, test, vi} from 'vitest';
 import App from './App.jsx';
 import {getBook, listBooks} from './books.js';
 import {listQuotes} from './quotes.js';
+import {exportAllQuotes} from './export.js';
 
 const auth = vi.hoisted(() => ({isLoading: false, isAuthenticated: true, user: {sub: 'reader-a'}, error: null,
   loginWithRedirect: vi.fn(), logout: vi.fn(), getAccessTokenSilently: vi.fn()}));
@@ -12,6 +13,7 @@ vi.mock('@auth0/auth0-react', () => ({useAuth0: () => auth}));
 vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), getBook: vi.fn(), BooksError: class extends Error {}}));
 vi.mock('./covers.js', () => ({loadCovers: vi.fn(async (books, receive) => books.forEach(item => receive(item.id, null)))}));
 vi.mock('./quotes.js', () => ({listQuotes: vi.fn()}));
+vi.mock('./export.js', () => ({exportAllQuotes: vi.fn(), exportBookQuotes: vi.fn()}));
 vi.mock('./BookView.jsx', () => ({default: ({book, onBack, onChanged, onDeleted}) => <div>
   <h1>View of {book.title}</h1>
   <button onClick={onBack}>Back to library</button>
@@ -25,6 +27,7 @@ beforeEach(() => {
   listBooks.mockReset().mockResolvedValue([book]);
   getBook.mockReset();
   listQuotes.mockReset().mockResolvedValue([]);
+  exportAllQuotes.mockReset();
 });
 afterEach(() => window.history.replaceState(null, '', '/'));
 
@@ -197,3 +200,68 @@ test('a deleted book returns to the library without that book', async () => {
   expect(screen.queryByText(/waiting for review/i)).not.toBeInTheDocument();
   expect(getBook).not.toHaveBeenCalled();
 }, 15000);
+
+test('library export actions are shown when the library has books and hidden when empty', async () => {
+  const {unmount} = render(<App />);
+  expect(await screen.findByRole('group', {name: 'Export quotes'})).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Export Markdown'})).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Export CSV'})).toBeInTheDocument();
+  unmount();
+
+  listBooks.mockResolvedValueOnce([]);
+  render(<App />);
+  await screen.findByRole('heading', {name: 'Your library is empty.'});
+  expect(screen.queryByRole('group', {name: 'Export quotes'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', {name: 'Export Markdown'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', {name: 'Export CSV'})).not.toBeInTheDocument();
+});
+
+test('clicking export markdown in library calls exportAllQuotes with markdown format', async () => {
+  exportAllQuotes.mockResolvedValueOnce();
+  render(<App />);
+  const button = await screen.findByRole('button', {name: 'Export Markdown'});
+  await userEvent.click(button);
+  expect(exportAllQuotes).toHaveBeenCalledWith(expect.any(Function), 'markdown');
+});
+
+test('clicking export csv in library calls exportAllQuotes with csv format', async () => {
+  exportAllQuotes.mockResolvedValueOnce();
+  render(<App />);
+  const button = await screen.findByRole('button', {name: 'Export CSV'});
+  await userEvent.click(button);
+  expect(exportAllQuotes).toHaveBeenCalledWith(expect.any(Function), 'csv');
+});
+
+test('library export shows busy state while export is in progress', async () => {
+  let finishExport;
+  exportAllQuotes.mockReturnValueOnce(new Promise(resolve => { finishExport = resolve; }));
+  render(<App />);
+  const mdButton = await screen.findByRole('button', {name: 'Export Markdown'});
+  const csvButton = screen.getByRole('button', {name: 'Export CSV'});
+  await userEvent.click(mdButton);
+  expect(mdButton).toHaveTextContent('Exporting…');
+  expect(mdButton).toBeDisabled();
+  expect(csvButton).toBeDisabled();
+  finishExport();
+  await waitFor(() => expect(mdButton).toHaveTextContent('Export Markdown'));
+  expect(mdButton).not.toBeDisabled();
+  expect(csvButton).not.toBeDisabled();
+});
+
+test('a 401 during library export shows the shared session-ended notice', async () => {
+  exportAllQuotes.mockRejectedValueOnce({status: 401});
+  render(<App />);
+  const button = await screen.findByRole('button', {name: 'Export Markdown'});
+  await userEvent.click(button);
+  expect(await screen.findByText('Your session ended. Sign in again to continue.')).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Sign in again'})).toBeInTheDocument();
+});
+
+test('a failure during library export shows an inline error', async () => {
+  exportAllQuotes.mockRejectedValueOnce(new Error('network error'));
+  render(<App />);
+  const button = await screen.findByRole('button', {name: 'Export Markdown'});
+  await userEvent.click(button);
+  expect(await screen.findByText('Export failed. Please try again.')).toBeInTheDocument();
+});
+

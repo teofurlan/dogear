@@ -161,6 +161,43 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.25rem;
+}
+
+.export-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+}
+
+.export-actions button.quiet {
+  border: 0;
+  background: transparent;
+  color: var(--catalog-ink);
+  text-decoration: underline;
+  text-underline-offset: .3em;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+
+.export-actions button.quiet:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.quote-error {
+  color: var(--catalog-red);
+  font-weight: 600;
+  margin-top: 0.4rem;
+}
+
 .intro-copy {
   max-width: 42ch;
   margin: 0.7rem 0 0;

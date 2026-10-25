@@ -28,13 +28,37 @@ describe('export helpers', () => {
     const getToken = vi.fn().mockResolvedValue('token');
     await exportBookQuotes(getToken, 'book-123');
 
-    expect(apiModule.api).toHaveBeenCalledWith(getToken, '/quotes/export?book_id=book-123', {
+    expect(apiModule.api).toHaveBeenCalledWith(getToken, '/quotes/export?book_id=book-123&format=markdown', {
       as: 'blob',
       signal: undefined,
     });
     expect(createObjectURL).toHaveBeenCalledWith(mockBlob);
     expect(clickSpy).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/test');
+
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    clickSpy.mockRestore();
+  });
+
+  it('exportBookQuotes calls api with csv format and triggers csv download', async () => {
+    const mockBlob = new Blob(['title,author,quote'], {type: 'text/csv'});
+    apiModule.api.mockResolvedValueOnce(mockBlob);
+
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:http://localhost/test-csv');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    const getToken = vi.fn().mockResolvedValue('token');
+    await exportBookQuotes(getToken, 'book-123', 'csv');
+
+    expect(apiModule.api).toHaveBeenCalledWith(getToken, '/quotes/export?book_id=book-123&format=csv', {
+      as: 'blob',
+      signal: undefined,
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(mockBlob);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/test-csv');
 
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
@@ -52,7 +76,7 @@ describe('export helpers', () => {
     const getToken = vi.fn().mockResolvedValue('token');
     await exportAllQuotes(getToken);
 
-    expect(apiModule.api).toHaveBeenCalledWith(getToken, '/quotes/export', {
+    expect(apiModule.api).toHaveBeenCalledWith(getToken, '/quotes/export?format=markdown', {
       as: 'blob',
       signal: undefined,
     });
@@ -64,4 +88,29 @@ describe('export helpers', () => {
     revokeObjectURL.mockRestore();
     clickSpy.mockRestore();
   });
+
+  it('exportAllQuotes calls api with csv format and triggers csv download', async () => {
+    const mockBlob = new Blob(['title,author,quote'], {type: 'text/csv'});
+    apiModule.api.mockResolvedValueOnce(mockBlob);
+
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:http://localhost/test-all-csv');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    const getToken = vi.fn().mockResolvedValue('token');
+    await exportAllQuotes(getToken, 'csv');
+
+    expect(apiModule.api).toHaveBeenCalledWith(getToken, '/quotes/export?format=csv', {
+      as: 'blob',
+      signal: undefined,
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(mockBlob);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/test-all-csv');
+
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    clickSpy.mockRestore();
+  });
+
 });
