@@ -1,5 +1,5 @@
 import {afterEach, expect, test, vi} from 'vitest';
-import {listBooks} from './books.js';
+import {fetchCover, listBooks, uploadCover} from './books.js';
 afterEach(() => vi.unstubAllGlobals());
 const book = {id:'000000000000000000000001',title:'Example',author:null};
 
@@ -29,4 +29,29 @@ test('requests work on browsers without AbortSignal.any (iOS Safari before 17.4)
   await listBooks(async () => 'tok').catch(() => {});
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+});
+
+test('fetchCover requests authenticated blob from /api/books/:id/cover', async () => {
+  const blob = new Blob(['bytes']);
+  const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, blob: async () => blob});
+  vi.stubGlobal('fetch', fetch);
+  const result = await fetchCover(async () => 'auth-token', 'book123');
+  expect(result).toBe(blob);
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe('/api/books/book123/cover');
+  expect(options.headers).toEqual({Authorization: 'Bearer auth-token'});
+});
+
+test('uploadCover puts binary image to /api/books/:id/cover', async () => {
+  const updated = {id: 'book123', title: 'T', author: null, has_cover_photo: true};
+  const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => updated});
+  vi.stubGlobal('fetch', fetch);
+  const file = new File(['fake-image'], 'cover.png', {type: 'image/png'});
+  const result = await uploadCover(async () => 'auth-token', 'book123', file);
+  expect(result).toEqual(updated);
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe('/api/books/book123/cover');
+  expect(options.method).toBe('PUT');
+  expect(options.headers).toEqual({Authorization: 'Bearer auth-token', 'Content-Type': 'image/png'});
+  expect(options.body).toBe(file);
 });

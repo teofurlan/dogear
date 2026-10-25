@@ -11,8 +11,15 @@ from tests.imaging.test_highlight import HIGHLIGHTERS, page_photo
 
 @pytest.mark.tesseract
 def test_no_model_prints_json_per_photo(tmp_path, capsys):
-    if default_tesseract_cmd() is None:
+    cmd = default_tesseract_cmd()
+    if cmd is None:
         pytest.skip("Tesseract is not installed")
+    import subprocess
+    from pathlib import Path
+
+    langs = subprocess.run([cmd, "--list-langs"], capture_output=True, text=True).stdout
+    if "spa" not in langs and not Path("models/tessdata/spa.traineddata").exists():
+        pytest.skip("local Spanish Tesseract data unavailable")
     photo = tmp_path / "page.png"
     cv2.imwrite(str(photo), page_photo(HIGHLIGHTERS["pink"]))
 

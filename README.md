@@ -10,7 +10,7 @@ Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Stea
 
 Reading on paper with a highlighter is great; copying the highlights out afterwards is not. Dogear moves that chore to a night job and keeps you in charge of the result:
 
-1. **Add a book** by typing it or photographing its cover. OCR suggests the title and author; nothing is saved until you confirm.
+1. **Add a book** by typing it or photographing its cover. OCR suggests the title and author; nothing is saved until you confirm. A cover photo is kept as the fallback cover when Open Library has no match.
 2. **Photograph each page you highlighted** while the book is still open. The photo goes to a private bucket.
 3. **Overnight**, a cron job reads every pending page with Tesseract and Gemma 4 on a CPU, stores each highlighted passage as a quote with a small crop of the page, and deletes the photo.
 4. **In the morning**, review each quote next to its crop: keep, edit or delete it, or add a passage the run missed. Quotes where the two readers disagreed are flagged.
@@ -122,7 +122,7 @@ Two images, two services:
 ## Privacy
 
 - Page photos are read by the night job's own model, not sent to a third-party AI API, and are deleted once processed. Only the small passage crops remain.
-- Cover photos are used for OCR and discarded. Book covers shown in the library come from [Open Library](https://openlibrary.org), queried with title and author only.
+- A cover photo is used for OCR and, when you add the book from it, stored privately as a fallback cover (only you can fetch it). Covers shown in the library come from [Open Library](https://openlibrary.org), queried with title and author only, when it has a match.
 - Every book, page and quote is scoped to the verified Auth0 subject. The service worker caches only a public offline page, never tokens, API responses or photos.
 
 ## Tests

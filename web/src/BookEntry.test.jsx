@@ -3,10 +3,16 @@ import {render, screen, fireEvent, waitFor} from '@testing-library/react';
 import {beforeEach, expect, test, vi} from 'vitest';
 import BookEntry from './BookEntry.jsx';
 import {createBook, identifyBook} from './book-entry.js';
+import {uploadCover} from './books.js';
 
 vi.mock('./book-entry.js', () => ({createBook: vi.fn(), identifyBook: vi.fn()}));
+vi.mock('./books.js', () => ({uploadCover: vi.fn()}));
 const saved = {id: '000000000000000000000099', title: 'Synthetic book', author: null};
-beforeEach(() => {createBook.mockReset().mockResolvedValue(saved); identifyBook.mockReset();});
+beforeEach(() => {
+  createBook.mockReset().mockResolvedValue(saved);
+  identifyBook.mockReset();
+  uploadCover.mockReset().mockResolvedValue({...saved, has_cover_photo: true});
+});
 const open = () => fireEvent.click(screen.getByRole('button', {name: 'Add book'}));
 
 test('manual entry requires a title and saves trimmed fields only after confirmation', async () => {
@@ -99,4 +105,56 @@ test('cancel aborts identification and late replies cannot restore discarded dat
   open();
   expect(screen.getByLabelText('Title')).toHaveValue('');
   expect(createBook).not.toHaveBeenCalled();
+});
+
+test('saving a book with a cover photo uploads the cover to the server', async () => {
+  const receive = vi.fn();
+  identifyBook.mockResolvedValue({title: 'Photo Book', author: null, text: ''});
+  uploadCover.mockResolvedValue({...saved, title: 'Photo Book', has_cover_photo: true});
+  render(<BookEntry getToken={vi.fn()} onCreated={receive} />); open();
+
+  const photo = new File(['image'], 'cover.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo]}});
+  expect(await screen.findByDisplayValue('Photo Book')).toBeVisible();
+
+  fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
+  await waitFor(() => expect(uploadCover).toHaveBeenCalledWith(expect.any(Function), saved.id, photo, expect.anything()));
+  expect(receive).toHaveBeenCalledWith({...saved, title: 'Photo Book', has_cover_photo: true});
+});
+
+test('keeps the book and reports when the cover photo upload fails', async () => {
+  const receive = vi.fn();
+  identifyBook.mockResolvedValue({title: 'Photo Book', author: null, text: ''});
+  uploadCover.mockRejectedValue(new Error('R2 unavailable'));
+  render(<BookEntry getToken={vi.fn()} onCreated={receive} />); open();
+
+  const photo = new File(['image'], 'cover.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo]}});
+  expect(await screen.findByDisplayValue('Photo Book')).toBeVisible();
+
+  fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
+  await waitFor(() => expect(receive).toHaveBeenCalledWith(saved));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText('Saved “Synthetic book” to your library, but its cover photo could not be stored.')).toBeInTheDocument();
+});
+
+test('keeps the created book unchanged when the upload response is not a book', async () => {
+  const receive = vi.fn();
+  identifyBook.mockResolvedValue({title: 'Photo Book', author: null, text: ''});
+  uploadCover.mockResolvedValue({});
+  render(<BookEntry getToken={vi.fn()} onCreated={receive} />); open();
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [new File(['image'], 'cover.png', {type: 'image/png'})]}});
+  expect(await screen.findByDisplayValue('Photo Book')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
+  await waitFor(() => expect(receive).toHaveBeenCalledWith(saved));
+  expect(screen.getByText('Saved “Synthetic book” to your library.')).toBeInTheDocument();
+});
+
+test('manual entry never calls uploadCover', async () => {
+  const receive = vi.fn();
+  render(<BookEntry getToken={vi.fn()} onCreated={receive} />); open();
+  fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'Manual Only'}});
+  fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
+  await waitFor(() => expect(receive).toHaveBeenCalled());
+  expect(uploadCover).not.toHaveBeenCalled();
 });

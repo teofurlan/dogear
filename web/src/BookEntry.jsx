@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {createBook, identifyBook} from './book-entry.js';
+import {uploadCover} from './books.js';
 import './book-entry-dropzone.css';
 
 export default function BookEntry({getToken, onCreated}) {
@@ -7,6 +8,7 @@ export default function BookEntry({getToken, onCreated}) {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [text, setText] = useState('');
+  const [coverFile, setCoverFile] = useState(null);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -18,7 +20,7 @@ export default function BookEntry({getToken, onCreated}) {
 
   function close() {
     request.current?.abort();
-    setOpen(false); setTitle(''); setAuthor(''); setText(''); setError(''); setStatus('idle'); setDragOver(false);
+    setOpen(false); setTitle(''); setAuthor(''); setText(''); setError(''); setStatus('idle'); setDragOver(false); setCoverFile(null);
     toggle.current?.focus();
   }
 
@@ -26,13 +28,14 @@ export default function BookEntry({getToken, onCreated}) {
     if (!file || saving.current) return;
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
-    setStatus('reading'); setError(''); setText('');
+    setStatus('reading'); setError(''); setText(''); setCoverFile(file);
     try {
       const result = await identifyBook(getToken, file, {signal: controller.signal});
       if (controller.signal.aborted) return;
       setTitle(result.title); setAuthor(result.author || ''); setText(result.text);
       if (!result.title) setError('No readable title was found. Enter the details manually or try a clearer photo.');
     } catch (problem) {
+      setCoverFile(null);
       if (!controller.signal.aborted) setError(problem.status === 401
         ? 'Your session ended. Sign in again before reading or saving a book.'
         : 'The cover could not be read. Enter the details manually, or try a JPEG or PNG under 6 MiB and 20 megapixels.');
@@ -45,9 +48,22 @@ export default function BookEntry({getToken, onCreated}) {
     const controller = new AbortController(); request.current = controller;
     saving.current = true; setStatus('saving'); setError('');
     try {
-      const book = await createBook(getToken, {title: title.trim(), author: author.trim() || null}, {signal: controller.signal});
+      let book = await createBook(getToken, {title: title.trim(), author: author.trim() || null}, {signal: controller.signal});
       if (controller.signal.aborted) return;
-      onCreated(book); close(); setNotice(`Saved “${book.title}” to your library.`);
+      let photoFailed = false;
+      if (coverFile) {
+        try {
+          const updated = await uploadCover(getToken, book.id, coverFile, {signal: controller.signal});
+          if (updated && typeof updated.id === 'string' && typeof updated.title === 'string') book = updated;
+        } catch {
+          // The book is already saved; keep it and tell the reader the photo was not stored.
+          photoFailed = true;
+        }
+      }
+      onCreated(book); close();
+      setNotice(photoFailed
+        ? `Saved “${book.title}” to your library, but its cover photo could not be stored.`
+        : `Saved “${book.title}” to your library.`);
     } catch (problem) {
       if (!controller.signal.aborted) setError(problem.status === 401
         ? 'Your session ended. Sign in again before saving a book.'
@@ -74,7 +90,7 @@ export default function BookEntry({getToken, onCreated}) {
           <strong>Take a cover photo</strong><span>Tap to open your camera or photo picker</span>
         </span>
       </div>
-      <p id="cover-help" className="field-help">JPEG or PNG, up to 6 MiB and 20 megapixels. The photo is used only to read these details, not stored as your cover.</p>
+      <p id="cover-help" className="field-help">JPEG or PNG, up to 6 MiB and 20 megapixels. Used to suggest details and kept as a fallback cover if no catalog match is found.</p>
       {status === 'reading' ? <p role="status">Reading cover… You can cancel at any time.</p> : null}
       {text ? <><p className="field-help">These are OCR suggestions, not a verified catalog match. Check the title and author.</p><details><summary>Detected text</summary><p className="detected-text">{text}</p></details></> : null}
       <label htmlFor="book-title">Title</label>

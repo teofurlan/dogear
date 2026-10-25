@@ -102,6 +102,7 @@ def test_each_verified_reader_can_create_and_list_only_their_books(mongo, auth):
         "id": first.json()["id"],
         "title": "A quiet morning",
         "author": None,
+        "has_cover_photo": False,
     }
     assert ObjectId.is_valid(first.json()["id"])
     assert client.get("/books", headers=bob).json() == []

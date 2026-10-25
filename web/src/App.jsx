@@ -69,6 +69,7 @@ function Library({getToken, signIn}) {
   const request = useRef(null);
   const busy = useRef(false);
   const coverCache = useRef(new Map());
+  const blobUrls = useRef(new Set());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,12 +89,25 @@ function Library({getToken, signIn}) {
     const controller = new AbortController();
     const missing = visibleBooks.filter(book => !coverCache.current.has(book.id));
     loadCovers(missing, (id, cover) => {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        if (cover?.startsWith('blob:')) URL.revokeObjectURL(cover);
+        return;
+      }
+      if (cover?.startsWith('blob:')) blobUrls.current.add(cover);
       coverCache.current.set(id, cover);
       setCovers(previous => ({...previous, [id]: cover}));
-    }, controller.signal);
+    }, controller.signal, {getToken});
     return () => controller.abort();
-  }, [visibleBooks]);
+  }, [visibleBooks, getToken]);
+
+  useEffect(() => {
+    return () => {
+      for (const url of blobUrls.current) {
+        URL.revokeObjectURL(url);
+      }
+      blobUrls.current.clear();
+    };
+  }, []);
 
   async function more() {
     if (busy.current || !hasMore) return;

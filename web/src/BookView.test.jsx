@@ -23,3 +23,10 @@ test('the back button returns to the library', async () => {
   await userEvent.click(screen.getByRole('button', {name: 'Back to library'}));
   expect(onBack).toHaveBeenCalled();
 });
+
+test('shows the provided cover URL in BookCover', () => {
+  const url = 'blob:http://localhost/stored-cover';
+  render(<BookView book={book} coverUrl={url} getToken={async () => 't'} onBack={() => {}} />);
+  const image = screen.getByRole('img', {name: `Representative cover of ${book.title}`});
+  expect(image).toHaveAttribute('src', url);
+});
