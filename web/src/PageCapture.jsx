@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {listPages, uploadPage} from './pages.js';
 import {prepareImage} from './downscale.js';
+import CameraCapture from './CameraCapture.jsx';
 
 const DECODE_MESSAGE = 'This photo format could not be read on this device. Try a JPEG or PNG, or take the photo with the camera.';
 const MESSAGES = {
@@ -26,8 +27,11 @@ export default function PageCapture({getToken, bookId, onSessionExpired, onUploa
   const [progress, setProgress] = useState(null);
   const [waiting, setWaiting] = useState(null);
   const [read, setRead] = useState(0);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
   const alive = useRef(true);
   const running = useRef(false);
+  const cameraButton = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -88,12 +92,46 @@ export default function PageCapture({getToken, bookId, onSessionExpired, onUploa
   return <section className="page-capture" aria-labelledby="capture-title">
     <h2 id="capture-title">Pages</h2>
     {progress ? <p className="upload-progress-summary" role="status">Uploading {progress.current} of {progress.total}…</p> : null}
-    <label className="capture-zone">
-      <input type="file" accept="image/*" capture="environment" multiple disabled={busy}
-        onChange={event => {upload([...event.target.files]); event.target.value = '';}} />
-      <strong>Photograph a page</strong>
-      <span>Tap to open your camera or choose photos. Photos are read tonight, then deleted.</span>
-    </label>
+    <div className="page-capture-controls" role="group" aria-label="Page capture options">
+      <button
+        ref={cameraButton}
+        type="button"
+        className="page-camera-button"
+        disabled={busy}
+        onClick={() => {setCameraOpen(true); setCameraError('');}}>
+        <strong>Photograph a page</strong>
+        <span>Open in-app camera to frame and capture a highlighted page</span>
+      </button>
+      <label className="page-gallery-action">
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={busy}
+          onChange={event => {upload([...event.target.files]); event.target.value = '';}}
+        />
+        <strong>Choose from gallery</strong>
+        <span>or choose photos. Photos are read tonight, then deleted.</span>
+      </label>
+    </div>
+    {cameraError ? <p role="alert" className="camera-error">{cameraError}</p> : null}
+    {cameraOpen ? (
+      <CameraCapture
+        guide="page"
+        onCapture={file => {
+          setCameraOpen(false);
+          cameraButton.current?.focus();
+          upload([file]);
+        }}
+        onClose={() => {
+          setCameraOpen(false);
+          cameraButton.current?.focus();
+        }}
+        onError={msg => {
+          setCameraError(msg);
+        }}
+      />
+    ) : null}
     {items.length ? <ul className="upload-list" aria-label="Upload progress">{items.map((item, index) => <li key={index} className={item.state === 'error' ? 'is-error' : ''} role={item.state === 'error' ? 'alert' : undefined}>{line(item)}</li>)}</ul> : null}
     <p className="capture-status" role="status">{status(waiting, read)}</p>
   </section>;
