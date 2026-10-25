@@ -57,3 +57,18 @@ test('disabled buttons use not-allowed cursor by default and wait cursor only wh
 test('book titles request the bundled display weight rather than an unavailable face', () => {
   expect(rule('.book-grid .book-title').getPropertyValue('font-weight')).toBe('700');
 });
+
+test('back button has underline and pointer cursor', () => {
+  expect(rule('.back-button').getPropertyValue('text-decoration')).toMatch(/underline/);
+  expect(rule('.back-button').getPropertyValue('cursor')).toBe('pointer');
+});
+
+test('pending badge has red background and bold text', () => {
+  expect(rule('.pending-badge').getPropertyValue('background')).toBe('var(--catalog-red)');
+  expect(rule('.pending-badge').getPropertyValue('font-weight')).toBe('600');
+});
+
+test('library search input has catalog ink text and red caret', () => {
+  expect(rule('.library-search').getPropertyValue('color')).toBe('var(--catalog-ink)');
+  expect(rule('.library-search').getPropertyValue('caret-color')).toBe('var(--catalog-red)');
+});

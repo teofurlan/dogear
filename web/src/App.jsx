@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useAuth0} from '@auth0/auth0-react';
-import {listBooks, PAGE_SIZE} from './books.js';
+import {getBook, listBooks, PAGE_SIZE} from './books.js';
 import {loadCovers} from './covers.js';
 import {chooseExampleBooks} from './example-books.js';
 import BookEntry from './BookEntry.jsx';
@@ -28,18 +28,39 @@ const readHash = () => /^#book=([a-f0-9]{24})$/i.exec(window.location.hash)?.[1]
 
 function Library({getToken, signIn}) {
   const [bookId, setBookId] = useState(readHash);
+  const [extraBooks, setExtraBooks] = useState({});
+  const [notFoundId, setNotFoundId] = useState(null);
+  const [bookError, setBookError] = useState(null);
+  const [loadingBookId, setLoadingBookId] = useState(null);
   const [waiting, setWaiting] = useState([]);
+  const pendingByBook = useMemo(() => {
+    const counts = new Map();
+    for (const quote of waiting) {
+      if (quote.book_id) {
+        counts.set(quote.book_id, (counts.get(quote.book_id) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [waiting]);
   const pushed = useRef(false);
   const heading = useRef(null);
   useEffect(() => {
-    const sync = () => setBookId(readHash());
+    const sync = () => {
+      setNotFoundId(null);
+      setBookError(null);
+      setBookId(readHash());
+    };
     window.addEventListener('popstate', sync); window.addEventListener('hashchange', sync);
     return () => {window.removeEventListener('popstate', sync); window.removeEventListener('hashchange', sync);};
   }, []);
   function openBook(id) {
+    setNotFoundId(null);
+    setBookError(null);
     window.history.pushState(null, '', '#book=' + id); pushed.current = true; setBookId(id);
   }
   function closeBook() {
+    setNotFoundId(null);
+    setBookError(null);
     if (pushed.current) {pushed.current = false; window.history.back();}
     else {window.history.replaceState(null, '', window.location.pathname + window.location.search); setBookId(null);}
   }
@@ -59,8 +80,23 @@ function Library({getToken, signIn}) {
 
   const [books, setBooks] = useState([]);
   const [addedBooks, setAddedBooks] = useState([]);
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearch('');
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setSearch(trimmed);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   // Newly saved books must not move the server pagination cursor past unseen books.
-  const visibleBooks = useMemo(() => [...new Map([...books, ...addedBooks].map(book => [book.id, book])).values()], [books, addedBooks]);
+  const visibleBooks = useMemo(() => search ? books : [...new Map([...books, ...addedBooks].map(book => [book.id, book])).values()], [books, addedBooks, search]);
   const [covers, setCovers] = useState({});
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
@@ -76,14 +112,14 @@ function Library({getToken, signIn}) {
     request.current = controller;
     busy.current = true;
     setBooks([]); setError(null); setStatus('loading');
-    listBooks(getToken, {signal: controller.signal}).then(page => {
+    listBooks(getToken, {q: search || undefined, signal: controller.signal}).then(page => {
       if (controller.signal.aborted) return;
       setBooks(page); setHasMore(page.length === PAGE_SIZE); setStatus('ready');
     }).catch(problem => {
       if (!controller.signal.aborted) {setError(problem.status === 401 ? 'session' : 'storage'); setStatus('error');}
     }).finally(() => {if (!controller.signal.aborted) busy.current = false;});
     return () => {controller.abort(); request.current?.abort();};
-  }, [getToken, retry]);
+  }, [getToken, retry, search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -115,7 +151,7 @@ function Library({getToken, signIn}) {
     const controller = new AbortController(); request.current = controller;
     setError(null); setStatus('more');
     try {
-      const page = await listBooks(getToken, {after: books.at(-1).id, signal: controller.signal});
+      const page = await listBooks(getToken, {after: books.at(-1).id, q: search || undefined, signal: controller.signal});
       if (controller.signal.aborted) return;
       setBooks(previous => [...new Map([...previous, ...page].map(book => [book.id, book])).values()]);
       setHasMore(page.length === PAGE_SIZE); setStatus('ready');
@@ -124,20 +160,108 @@ function Library({getToken, signIn}) {
     } finally {if (!controller.signal.aborted) busy.current = false;}
   }
 
-  const openBookData = bookId ? visibleBooks.find(item => item.id === bookId) || {id: bookId, title: 'This book', author: null} : null;
-  if (bookId && status === 'loading') return <p role="status" className="feedback">Loading your library…</p>;
+  useEffect(() => {
+    if (!bookId) return undefined;
+    if (visibleBooks.some(item => item.id === bookId) || extraBooks[bookId] || notFoundId === bookId || bookError === bookId) return undefined;
+    if (status === 'loading') return undefined;
+    const controller = new AbortController();
+    setLoadingBookId(bookId);
+    getBook(getToken, bookId, {signal: controller.signal})
+      .then(book => {
+        if (!controller.signal.aborted) {
+          setExtraBooks(previous => ({...previous, [book.id]: book}));
+          setLoadingBookId(null);
+        }
+      })
+      .catch(problem => {
+        if (!controller.signal.aborted) {
+          setLoadingBookId(null);
+          if (problem?.status === 404) setNotFoundId(bookId);
+          else setBookError(bookId);
+        }
+      });
+    return () => controller.abort();
+  }, [bookId, visibleBooks, extraBooks, notFoundId, bookError, status, getToken]);
+
+  useEffect(() => {
+    if (!waiting.length) return undefined;
+    const controller = new AbortController();
+    const missingIds = [...new Set(waiting.map(q => q.book_id))]
+      .filter(id => id && !visibleBooks.some(b => b.id === id) && !extraBooks[id]);
+    for (const id of missingIds) {
+      getBook(getToken, id, {signal: controller.signal})
+        .then(book => {
+          if (!controller.signal.aborted) {
+            setExtraBooks(previous => ({...previous, [book.id]: book}));
+          }
+        })
+        .catch(() => {});
+    }
+    return () => controller.abort();
+  }, [waiting, visibleBooks, extraBooks, getToken]);
+
+  const openBookData = bookId ? (visibleBooks.find(item => item.id === bookId) || extraBooks[bookId] || null) : null;
+  if (bookId && (status === 'loading' || loadingBookId === bookId)) return <p role="status" className="feedback">{status === 'loading' ? 'Loading your library…' : 'Loading book…'}</p>;
+  if (bookId && notFoundId === bookId) {
+    return <section className="feedback" role="status">
+      <p>This book is not in your library.</p>
+      <button type="button" className="back-button" onClick={closeBook}>Back to library</button>
+    </section>;
+  }
+  if (bookId && bookError === bookId) {
+    return <section className="feedback" role="status">
+      <p>This book could not load. Your books have not changed.</p>
+      <button type="button" className="retry-button" onClick={() => setBookError(null)}>Try again</button>
+      <div><button type="button" className="back-button" onClick={closeBook}>Back to library</button></div>
+    </section>;
+  }
   if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} />;
-  const waitingBook = waiting.length ? visibleBooks.find(item => item.id === waiting[0].book_id) : null;
 
   return <>
     <div className="heading-row"><h1 ref={heading} tabIndex={-1}>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
     <p className="intro-copy">A shelf of books worth finding again.</p>
-    {waiting.length ? <section className="review-banner" aria-label="Quotes to review"><p>{waiting.length} {waiting.length === 1 ? 'quote is' : 'quotes are'} waiting for review.</p><a href={'#book=' + waiting[0].book_id} onClick={event => {event.preventDefault(); openBook(waiting[0].book_id);}}>Review{waitingBook ? ` “${waitingBook.title}”` : ''}</a></section> : null}
+    {waiting.length ? <section className="review-banner" aria-label="Quotes to review">
+      <p>{waiting.length} {waiting.length === 1 ? 'quote is' : 'quotes are'} waiting for review.</p>
+      <div className="review-links">
+        {[...pendingByBook.entries()].map(([id, count]) => {
+          const b = visibleBooks.find(item => item.id === id) || extraBooks[id];
+          return <a key={id} href={'#book=' + id} onClick={event => {event.preventDefault(); openBook(id);}}>
+            Review{b ? ` “${b.title}”` : ''}{pendingByBook.size > 1 ? ` (${count})` : ''}
+          </a>;
+        })}
+      </div>
+    </section> : null}
     {status !== 'loading' ? <BookEntry getToken={getToken} onCreated={book => setAddedBooks(previous => [...previous, book])} /> : null}
+    {(status !== 'loading' && (visibleBooks.length > 0 || search || query)) || search || query ? <div className="search-row">
+      <input
+        type="search"
+        className="library-search"
+        placeholder="Search by title or author"
+        aria-label="Search by title or author"
+        value={query}
+        onChange={event => setQuery(event.target.value)}
+      />
+      {query ? <button type="button" className="clear-search" onClick={() => setQuery('')}>Clear</button> : null}
+    </div> : null}
     {status === 'loading' ? <><p role="status" className="feedback">Loading your library…</p><ul className="book-grid skeleton-grid" aria-hidden="true">{[0,1,2,3].map(index => <li key={index} className="book skeleton"><div className="cover-wrap" /><div className="book-copy" /></li>)}</ul></> : null}
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
-    {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
-    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><a className="book-link" href={'#book=' + book.id} aria-label={book.author ? `${book.title} by ${book.author}` : book.title} onClick={event => {event.preventDefault(); openBook(book.id);}}><BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></a></li>)}</ul> : null}
+    {status === 'ready' && !visibleBooks.length && !error ? (
+      search ? <section className="empty-library" role="status"><h2>No books found</h2><p>No books match “{search}”.</p></section>
+        : <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section>
+    ) : null}
+    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => {
+      const pendingCount = pendingByBook.get(book.id) || 0;
+      return <li key={book.id} className="book">
+        <a className="book-link" href={'#book=' + book.id} aria-label={book.author ? `${book.title} by ${book.author}` : book.title} onClick={event => {event.preventDefault(); openBook(book.id);}}>
+          <BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} />
+          <div className="book-copy">
+            <h2 className="book-title">{book.title}</h2>
+            <p className="book-author">{book.author || 'Author not provided'}</p>
+            {pendingCount > 0 ? <span className="pending-badge">{pendingCount} to review</span> : null}
+          </div>
+        </a>
+      </li>;
+    })}</ul> : null}
     {hasMore && !error ? <button className="load-more" disabled={status === 'more'} aria-busy={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
   </>;
 }

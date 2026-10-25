@@ -1,5 +1,6 @@
 """A tiny in-memory pymongo collection: only the operators the adapters use."""
 
+import re
 from copy import deepcopy
 from types import SimpleNamespace
 
@@ -15,11 +16,21 @@ def _matches(row, query):
         have = row.get(key)
         if isinstance(want, dict):
             for op, value in want.items():
+                if op == "$options":
+                    continue
                 ok = {
                     "$in": lambda: have in value,
                     "$nin": lambda: have not in value,
                     "$lt": lambda: have is not None and have < value,
                     "$gt": lambda: have is not None and have > value,
+                    "$regex": lambda: have is not None
+                    and bool(
+                        re.search(
+                            value,
+                            str(have),
+                            flags=re.IGNORECASE if want.get("$options") == "i" else 0,
+                        )
+                    ),
                 }[op]()
                 if not ok:
                     return False

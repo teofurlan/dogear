@@ -1,5 +1,5 @@
 import {afterEach, expect, test, vi} from 'vitest';
-import {fetchCover, listBooks, uploadCover} from './books.js';
+import {fetchCover, getBook, listBooks, uploadCover} from './books.js';
 afterEach(() => vi.unstubAllGlobals());
 const book = {id:'000000000000000000000001',title:'Example',author:null};
 
@@ -13,6 +13,15 @@ test('book requests forward only a bearer token to the local API with bounded pa
   expect(options.credentials).toBe('omit');
 });
 
+test('listBooks appends trimmed q parameter when provided', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok:true,json:async()=>[book]});
+  vi.stubGlobal('fetch', fetch);
+  await listBooks(async () => 'access-token', {q: '  García  '});
+  expect(fetch.mock.calls[0][0]).toBe('/api/books?limit=24&q=Garc%C3%ADa');
+  await listBooks(async () => 'access-token', {q: '   '});
+  expect(fetch.mock.calls[1][0]).toBe('/api/books?limit=24');
+});
+
 test('unauthorized, unavailable and malformed replies are not accepted as library data', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:false,status:401}));
   await expect(listBooks(async () => 'token')).rejects.toMatchObject({status:401});
@@ -22,8 +31,23 @@ test('unauthorized, unavailable and malformed replies are not accepted as librar
   await expect(listBooks(async () => 'token')).rejects.toThrow();
 });
 
+test('getBook requests authenticated book from /api/books/:id', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => book});
+  vi.stubGlobal('fetch', fetch);
+  const result = await getBook(async () => 'auth-token', book.id);
+  expect(result).toEqual(book);
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe('/api/books/' + book.id);
+  expect(options.headers).toEqual({Authorization: 'Bearer auth-token'});
+});
+
+test('getBook rejects on 404 with status 404', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok: false, status: 404});
+  vi.stubGlobal('fetch', fetch);
+  await expect(getBook(async () => 'auth-token', 'nonexistent')).rejects.toMatchObject({status: 404});
+});
+
 test('requests work on browsers without AbortSignal.any (iOS Safari before 17.4)', async () => {
-  vi.stubGlobal('AbortSignal', {timeout: AbortSignal.timeout.bind(AbortSignal)});
   const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({id: '000000000000000000000001', title: 'T', author: null})});
   vi.stubGlobal('fetch', fetch);
   await listBooks(async () => 'tok').catch(() => {});

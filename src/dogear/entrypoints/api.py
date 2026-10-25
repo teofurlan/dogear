@@ -265,12 +265,33 @@ def create_app() -> FastAPI:
         books: Annotated[MongoBooks, Depends(book_store)],
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         after: Annotated[str | None, Query(pattern="^[0-9a-fA-F]{24}$")] = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
     ):
         """List own books by ascending ID; continue with the last returned ID as after."""
         try:
-            return books.list_for_owner(subject, limit, after)
+            return books.list_for_owner(subject, limit, after, q=q)
         except BooksUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
+
+    @app.get(
+        "/books/{book_id}",
+        response_model=Book,
+        tags=["books"],
+        responses={**BOOK_ERRORS, 404: {"description": "Unknown book"}},
+    )
+    def get_book(
+        book_id: str,
+        subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
+    ):
+        """Get a single book by ID, only if owned by the caller."""
+        try:
+            book = books.get_for_owner(subject, book_id)
+        except BooksUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+        if book is None:
+            raise HTTPException(404, "Book not found")
+        return book
 
     @app.put(
         "/books/{book_id}/cover",

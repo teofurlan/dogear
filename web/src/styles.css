@@ -373,6 +373,92 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.back-button {
+  border: 0;
+  background: transparent;
+  color: var(--catalog-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+  padding: 0;
+  cursor: pointer;
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+
+.pending-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--catalog-red);
+  border-radius: 2px;
+}
+
+.review-banner {
+  margin-block: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--catalog-ink);
+  background: color-mix(in srgb, var(--catalog-paper) 80%, white);
+}
+
+.review-banner p {
+  margin: 0 0 0.5rem;
+}
+
+.review-banner .review-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.review-banner a {
+  font-weight: 600;
+  color: var(--catalog-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.search-row {
+  margin-block: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.library-search {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--catalog-rule);
+  border-radius: 0;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color: var(--catalog-ink);
+  background: var(--catalog-paper);
+  caret-color: var(--catalog-red);
+}
+
+.library-search:focus-visible {
+  outline: 3px solid var(--catalog-red);
+  outline-offset: 2px;
+}
+
+.clear-search {
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--catalog-rule);
+  background: transparent;
+  color: var(--catalog-ink);
+  cursor: pointer;
+}
+
+.clear-search:hover {
+  background: color-mix(in srgb, var(--catalog-paper) 80%, var(--catalog-rule));
+}
+
 .catalog-footer {
   display: flex;
   flex-wrap: wrap;

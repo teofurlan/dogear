@@ -10,7 +10,7 @@ const auth = vi.hoisted(() => ({
   loginWithRedirect: vi.fn(), logout: vi.fn(), getAccessTokenSilently: vi.fn()
 }));
 vi.mock('@auth0/auth0-react', () => ({useAuth0: () => auth}));
-vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), BooksError: class extends Error {constructor(status) {super('Books unavailable'); this.status = status;}}}));
+vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), getBook: vi.fn(), BooksError: class extends Error {constructor(status) {super('Books unavailable'); this.status = status;}}}));
 vi.mock('./covers.js', () => ({loadCovers: vi.fn()}));
 
 const book = {id: '000000000000000000000001', title: 'A quiet afternoon', author: 'Ada Reed'};

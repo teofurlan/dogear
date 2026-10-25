@@ -6,7 +6,7 @@ import {listBooks} from './books.js';
 import {createBook} from './book-entry.js';
 vi.mock('@auth0/auth0-react', () => ({useAuth0: () => ({isAuthenticated: true, user: {sub: 'synthetic-reader'}, getAccessTokenSilently: token})}));
 const token = vi.fn();
-vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn()}));
+vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), getBook: vi.fn()}));
 vi.mock('./covers.js', () => ({loadCovers: vi.fn()}));
 vi.mock('./book-entry.js', () => ({createBook: vi.fn(), identifyBook: vi.fn()}));
 

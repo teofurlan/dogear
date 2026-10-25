@@ -35,7 +35,8 @@ an Auth0 **API access token** (not an ID token).
 | Route | Request | Result |
 |---|---|---|
 | `POST /books` | `{"title":"A quiet morning","author":"Ada Reed"}` | `201`, with `id`, `title`, `author` |
-| `GET /books` | Optional `limit` and `after` query parameters | `200`, an array containing only your books |
+| `GET /books` | Optional `limit`, `after`, and `q` query parameters | `200`, an array containing only your books |
+| `GET /books/{book_id}` | | `200`, the book payload (including `has_cover_photo`); `404` when nonexistent or owned by another reader |
 | `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"..."}`; creates nothing |
 | `PUT /books/{book_id}/cover` | Raw `image/jpeg` or `image/png` cover photo | `200`, the book with `has_cover_photo: true`; `404` for an unknown or other-owner book; `503` when storage is unavailable |
 | `GET /books/{book_id}/cover` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` without a stored photo |
@@ -44,7 +45,9 @@ an Auth0 **API access token** (not an ID token).
   1-300 characters. Extra fields, including any owner or ID, are rejected with `422`.
 - Listing defaults to 50 books, with a maximum `limit` of 100, in ascending MongoDB ID order.
   To continue, pass the last returned `id` as `after` (24 hexadecimal characters). An empty
-  array ends the traversal. This is not a snapshot across concurrent inserts.
+  array ends the traversal. An optional `q` query parameter filters books whose title or author
+  matches the query string, case- and accent-insensitively, while preserving `limit` and `after`
+  pagination. This is not a snapshot across concurrent inserts.
 - There is no edit or delete for books yet.
 
 Book payloads include `has_cover_photo` (`true` once a cover photo is stored). Book creation

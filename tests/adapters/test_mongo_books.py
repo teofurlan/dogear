@@ -75,6 +75,39 @@ def test_list_for_owner_includes_has_cover_photo(books):
     assert items[1]["has_cover_photo"] is True
 
 
+def test_list_for_owner_with_search_accent_and_case_insensitive(books):
+    b1 = books.create("alice", "Cien años de soledad", "Gabriel García Márquez")
+    b2 = books.create("alice", "El amor en los tiempos del cólera", "Gabriel Garcia Marquez")
+    b3 = books.create("alice", "Rayuela", "Julio Cortázar")
+    b4 = books.create("bob", "Cien años de soledad", "Gabriel García Márquez")
+
+    # Match by title with accents ignoring accents
+    assert [b["id"] for b in books.list_for_owner("alice", 10, None, q="anos")] == [b1["id"]]
+    assert [b["id"] for b in books.list_for_owner("alice", 10, None, q="años")] == [b1["id"]]
+
+    # Match by author case-insensitively and accent-insensitively
+    results_garcia = books.list_for_owner("alice", 10, None, q="GARCIA")
+    assert [b["id"] for b in results_garcia] == [b1["id"], b2["id"]]
+    results_accent = books.list_for_owner("alice", 10, None, q="garcía")
+    assert [b["id"] for b in results_accent] == [b1["id"], b2["id"]]
+
+    # Owner scoping: Bob's book is never returned to Alice
+    results_bob = books.list_for_owner("bob", 10, None, q="anos")
+    assert [b["id"] for b in results_bob] == [b4["id"]]
+
+    # Pagination with search
+    first_page = books.list_for_owner("alice", limit=1, after=None, q="Gabriel")
+    assert len(first_page) == 1
+    assert first_page[0]["id"] == b1["id"]
+    second_page = books.list_for_owner("alice", limit=1, after=b1["id"], q="Gabriel")
+    assert len(second_page) == 1
+    assert second_page[0]["id"] == b2["id"]
+
+    # Empty or whitespace query returns normal list
+    all_alice = books.list_for_owner("alice", 10, None, q="   ")
+    assert len(all_alice) == 3
+
+
 def test_storage_errors_raise_books_unavailable(books, monkeypatch):
     class FailingCollection:
         def insert_one(self, *args, **kwargs):

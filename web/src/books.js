@@ -7,11 +7,12 @@ export class BooksError extends Error {
   constructor(status) { super('Book storage unavailable'); this.status = status; }
 }
 
-export async function listBooks(getToken, {after, signal} = {}) {
+export async function listBooks(getToken, {after, q, signal} = {}) {
   const token = await getToken({timeoutInSeconds: 10});
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const query = new URLSearchParams({limit: String(PAGE_SIZE)});
   if (after) query.set('after', after);
+  if (q?.trim()) query.set('q', q.trim());
   const response = await fetch('/api/books?' + query, {
     headers: {Authorization: `Bearer ${token}`}, credentials: 'omit',
     signal: anySignal([signal, AbortSignal.timeout(8000)].filter(Boolean))
@@ -25,6 +26,9 @@ export async function listBooks(getToken, {after, signal} = {}) {
   )) throw new BooksError(503);
   return books;
 }
+
+export const getBook = (getToken, bookId, {signal} = {}) =>
+  api(getToken, `/books/${bookId}`, {signal});
 
 export const fetchCover = (getToken, bookId, {signal} = {}) =>
   api(getToken, `/books/${bookId}/cover`, {as: 'blob', signal});
