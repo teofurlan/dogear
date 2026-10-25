@@ -158,3 +158,14 @@ test('manual entry never calls uploadCover', async () => {
   await waitFor(() => expect(receive).toHaveBeenCalled());
   expect(uploadCover).not.toHaveBeenCalled();
 });
+
+test('save is marked busy only while the book is being saved', async () => {
+  createBook.mockReturnValue(new Promise(() => {}));
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const save = screen.getByRole('button', {name: 'Save book'});
+  expect(save).toBeDisabled();
+  expect(save).not.toHaveAttribute('aria-busy', 'true');
+  fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'Synthetic book'}});
+  fireEvent.click(save);
+  expect(await screen.findByRole('button', {name: 'Saving book…'})).toHaveAttribute('aria-busy', 'true');
+});

@@ -138,7 +138,7 @@ function Library({getToken, signIn}) {
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
     {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
     {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><a className="book-link" href={'#book=' + book.id} aria-label={book.author ? `${book.title} by ${book.author}` : book.title} onClick={event => {event.preventDefault(); openBook(book.id);}}><BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></a></li>)}</ul> : null}
-    {hasMore && !error ? <button className="load-more" disabled={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
+    {hasMore && !error ? <button className="load-more" disabled={status === 'more'} aria-busy={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
   </>;
 }
 
@@ -156,7 +156,7 @@ export default function App() {
     try {await logout({logoutParams: {returnTo: window.location.origin}});} catch {setActionError(true); setStarting(false);}
   }
   return <div className={`catalog-shell${showSignIn ? ' catalog-shell--signin' : ''}`}>
-    <header className="catalog-header"><a className="wordmark" href="/" aria-label="Dogear home">dogear<span aria-hidden="true">.</span></a>{isAuthenticated ? <button className="signout-button" onClick={signOut} disabled={starting}>Sign out</button> : null}</header>
+    <header className="catalog-header"><a className="wordmark" href="/" aria-label="Dogear home">dogear<span aria-hidden="true">.</span></a>{isAuthenticated ? <button className="signout-button" onClick={signOut} disabled={starting} aria-busy={starting}>Sign out</button> : null}</header>
     <main className="catalog-main">
       {isLoading ? <p className="feedback" role="status">Checking your session…</p> : isAuthenticated && user?.sub && !error ? <Library key={user.sub} getToken={getAccessTokenSilently} signIn={signIn} /> : <>
         <div className="catalog-intro"><div className="heading-row"><h1>Your books, together.</h1></div></div>
@@ -167,7 +167,7 @@ export default function App() {
             <p className="login-availability">Snap a page while you read. A small open model types the highlights overnight; you review them in the morning.</p>
             {error ? <p role="alert">Sign-in could not finish. Try again to start a new session.</p> : null}
           </div>
-          <button onClick={signIn} disabled={starting}>{starting ? 'Opening sign-in…' : 'Sign in to library'}</button>
+          <button onClick={signIn} disabled={starting} aria-busy={starting}>{starting ? 'Opening sign-in…' : 'Sign in to library'}</button>
         </section>
         <ExampleGallery />
       </>}
