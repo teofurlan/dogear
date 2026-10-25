@@ -9,15 +9,16 @@ from sentry_sdk.transport import Transport
 
 from dogear.application.extract import Candidate, extract_quotes
 from dogear.domain.passages import Box
-from dogear.entrypoints import extract_cli
+from dogear.application.night import NightSummary
+from dogear.entrypoints import extract_cli, night_cli
 from dogear.ports.reader import ReaderUnavailable
 
 PRIVATE = "private-photo-quote-token"
 
 
 @pytest.fixture
-def run(monkeypatch, capsys):
-    envelopes, flushes, options, ocr_options, reader_options = [], [], [], [], []
+def offline(monkeypatch):
+    envelopes, flushes, options = [], [], []
     client_type = sentry_sdk.Client
 
     class OfflineTransport(Transport):
@@ -34,6 +35,12 @@ def run(monkeypatch, capsys):
 
     monkeypatch.setattr(sentry_sdk, "Client", client)
     monkeypatch.setenv("DOGEAR_SENTRY_DSN", "https://public@example.invalid/1")
+    return SimpleNamespace(envelopes=envelopes, flushes=flushes, options=options, transport=OfflineTransport)
+
+
+@pytest.fixture
+def run(monkeypatch, capsys, offline):
+    ocr_options, reader_options = [], []
     monkeypatch.setattr(extract_cli.cv2, "imread", lambda path: np.zeros((2, 2, 3), dtype=np.uint8))
     def ocr(**kwargs):
         ocr_options.append(kwargs)
@@ -53,8 +60,9 @@ def run(monkeypatch, capsys):
         return [Candidate(PRIVATE, PRIVATE, Box(0, 0, 1, 1))]
 
     monkeypatch.setattr(extract_cli, "extract_quotes", extract)
-    return SimpleNamespace(envelopes=envelopes, flushes=flushes, options=options, output=capsys,
-                           transport=OfflineTransport, ocr_options=ocr_options, reader_options=reader_options)
+    return SimpleNamespace(envelopes=offline.envelopes, flushes=offline.flushes, options=offline.options,
+                           output=capsys, transport=offline.transport, ocr_options=ocr_options,
+                           reader_options=reader_options)
 
 
 def transaction(run):
@@ -172,3 +180,100 @@ def test_real_extraction_keeps_model_unavailable_fallback(run, monkeypatch):
     assert next(s for s in event["spans"] if s["op"] == "model.read")["status"] == "internal_error"
     assert event["contexts"]["trace"]["status"] == "ok"
     assert PRIVATE.encode() not in b"".join(e.serialize() for e in run.envelopes)
+
+
+NIGHT_ENV = {
+    "DOGEAR_MONGODB_URI": "mongodb+srv://db.example.test/",
+    "DOGEAR_MONGODB_USERNAME": "user",
+    "DOGEAR_MONGODB_PASSWORD": PRIVATE,
+    "DOGEAR_MONGODB_DATABASE": "dogear",
+    "DOGEAR_R2_ENDPOINT": "https://acct.r2.cloudflarestorage.com",
+    "DOGEAR_R2_ACCESS_KEY_ID": "key",
+    "DOGEAR_R2_SECRET_ACCESS_KEY": PRIVATE,
+    "DOGEAR_R2_BUCKET": "dogear",
+}
+
+
+@pytest.fixture
+def night(monkeypatch, capsys, offline):
+    for name, value in NIGHT_ENV.items():
+        monkeypatch.setenv(name, value)
+    outcome = SimpleNamespace(summary=NightSummary(2, 2, 0, 2))
+
+    class Store:
+        def __init__(self, config):
+            pass
+
+        def close(self):
+            pass
+
+    class Photos:
+        def __init__(self, config):
+            pass
+
+        def get(self, key):
+            return PRIVATE.encode()
+
+        def delete(self, key):
+            pass
+
+    def run_night(store, photos, extract, **_):
+        # Two pending pages, as the real run reads and extracts them.
+        for key in (PRIVATE + "-1.jpg", PRIVATE + "-2.jpg"):
+            photos.get(key)
+            extract(np.zeros((2, 2, 3), dtype=np.uint8))
+            photos.delete(key)
+        return outcome.summary
+
+    def extract(img, ocr, reader):
+        ocr.read_words(img)
+        if reader is not None:
+            reader.read(img)
+        return [Candidate(PRIVATE, PRIVATE, Box(0, 0, 1, 1))]
+
+    monkeypatch.setattr(night_cli, "MongoCaptures", Store)
+    monkeypatch.setattr(night_cli, "R2Photos", Photos)
+    monkeypatch.setattr(night_cli, "TesseractOcr", lambda **kw: SimpleNamespace(read_words=lambda img: []))
+    monkeypatch.setattr(night_cli, "OllamaReader", lambda **kw: SimpleNamespace(read=lambda img: PRIVATE))
+    monkeypatch.setattr(night_cli, "run_night", run_night)
+    monkeypatch.setattr(night_cli, "extract_quotes", extract)
+    return SimpleNamespace(offline=offline, outcome=outcome, output=capsys)
+
+
+def test_night_run_traces_every_page_without_exporting_content(night):
+    assert night_cli.main(["--cpu-only"]) == 0
+    assert "dogear-night: pages=2 processed=2 failed=0 quotes=2" in night.output.readouterr().err
+    event = transaction(night.offline)
+    assert event["transaction"] == "dogear.night"
+    assert sorted(span["op"] for span in event["spans"]) == sorted(
+        ["photo.load", "photo.extract", "ocr.read", "model.read"] * 2
+    )
+    assert event["contexts"]["trace"]["status"] == "ok"
+    assert set(event) == {"event_id", "type", "start_timestamp", "timestamp", "transaction", "contexts", "spans"}
+    assert PRIVATE.encode() not in b"".join(e.serialize() for e in night.offline.envelopes)
+    assert night.offline.flushes == [2.0]
+
+
+def test_night_run_with_a_failed_page_keeps_exit_code_and_marks_failure(night):
+    night.outcome.summary = NightSummary(2, 1, 1, 1)
+    assert night_cli.main(["--no-model"]) == 1
+    event = transaction(night.offline)
+    assert event["contexts"]["trace"]["status"] == "internal_error"
+    assert "model.read" not in {span["op"] for span in event["spans"]}
+
+
+def test_night_run_without_storage_configuration_marks_invalid_argument(night, monkeypatch):
+    monkeypatch.delenv("DOGEAR_R2_BUCKET")
+    assert night_cli.main([]) == 2
+    assert transaction(night.offline)["contexts"]["trace"]["status"] == "invalid_argument"
+
+
+def test_night_run_telemetry_failure_does_not_change_the_run(night, monkeypatch):
+    def broken(**kwargs):
+        raise RuntimeError(PRIVATE)
+
+    monkeypatch.setattr(sentry_sdk, "Client", broken)
+    assert night_cli.main([]) == 0
+    err = night.output.readouterr().err
+    assert err == "dogear-night: pages=2 processed=2 failed=0 quotes=2 seconds=" + err.split("seconds=")[1]
+    assert night.offline.envelopes == []

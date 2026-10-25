@@ -1,18 +1,21 @@
 # Night-run tracing
 
-Optional, content-free Sentry tracing for `dogear-extract`. It is not wired into
-`dogear-night` yet, so the scheduled Render cron run emits no traces; only
-`night-job <photo>` smoke runs (which call `dogear-extract`) do.
+Optional, content-free Sentry tracing for `dogear-night` (the scheduled Render
+cron run) and `dogear-extract`.
 
 Install `uv sync --locked --extra observability` and explicitly provide
 `DOGEAR_SENTRY_DSN` in the process environment to enable Sentry tracing for
-`dogear-extract`. The night-job image installs this extra; the default local
-installation does not. The CLI does not load `.env` automatically: use
+`dogear-night` and `dogear-extract`. The night-job image installs this extra; the default local
+installation does not. Neither CLI loads `.env` automatically: use
 `uv run --env-file .env --extra observability dogear-extract page.jpg --no-model`
 only after configuring an authorized Sentry project. Empty/unset DSN disables it.
 
-Each CLI run emits one `dogear.extract` transaction with timed `photo.load`,
+Each `dogear-extract` run emits one `dogear.extract` transaction with timed `photo.load`,
 `photo.extract`, `ocr.read`, and (unless `--no-model`) `model.read` spans.
+Each `dogear-night` run emits one `dogear.night` transaction with the same spans
+for every page it processes (`photo.load` is the R2 read). Its status is `ok`,
+`internal_error` when any page failed (exit 1), or `invalid_argument` when storage
+is not configured (exit 2).
 These are boundary timings, not every internal image-processing step. Model
 unavailability marks its span failed while preserving the successful OCR fallback.
 Unreadable photos retain exit 2; extraction exceptions still propagate.
