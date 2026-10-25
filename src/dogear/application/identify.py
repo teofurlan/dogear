@@ -68,41 +68,33 @@ def suggest(tsv: str, width: int = 1, height: int = 1) -> dict:
             author.removeprefix("by ").removeprefix("By ").removeprefix("por ")[:300]
         )
 
-    w_img = max(1, width)
-    h_img = max(1, height)
+    def scaled(value: int, size: int) -> float:
+        return min(1.0, max(0.0, round(value / max(1, size), 4)))
+
+    def number(row: dict, key: str) -> int:
+        return int(row.get(key) or 0)
 
     out_lines = []
     for idx, (line_height, line_text, rows) in enumerate(ranked[:200]):
-        lefts = [int(r.get("left", 0) or 0) for r in rows]
-        tops = [int(r.get("top", 0) or 0) for r in rows]
-        rights = [
-            int(r.get("left", 0) or 0) + int(r.get("width", 0) or 0) for r in rows
-        ]
-        bottoms = [
-            int(r.get("top", 0) or 0) + int(r.get("height", 0) or 0) for r in rows
-        ]
-
-        box_left = min(lefts)
-        box_top = min(tops)
-        box_width = max(0, max(rights) - box_left)
-        box_height = max(0, max(bottoms) - box_top)
-
-        norm_x = min(1.0, max(0.0, round(box_left / w_img, 4)))
-        norm_y = min(1.0, max(0.0, round(box_top / h_img, 4)))
-        norm_w = min(1.0, max(0.0, round(box_width / w_img, 4)))
-        norm_h = min(1.0, max(0.0, round(box_height / h_img, 4)))
-
+        left = min(number(row, "left") for row in rows)
+        top = min(number(row, "top") for row in rows)
+        right = max(number(row, "left") + number(row, "width") for row in rows)
+        bottom = max(number(row, "top") + number(row, "height") for row in rows)
         if line_height >= largest * 0.8:
             role = "title"
         elif idx == author_idx:
             role = "author"
         else:
             role = None
-
         out_lines.append(
             {
                 "text": line_text,
-                "box": [norm_x, norm_y, norm_w, norm_h],
+                "box": [
+                    scaled(left, width),
+                    scaled(top, height),
+                    scaled(right - left, width),
+                    scaled(bottom - top, height),
+                ],
                 "role": role,
             }
         )

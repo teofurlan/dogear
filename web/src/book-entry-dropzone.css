@@ -79,10 +79,8 @@
   box-sizing: border-box;
   background: rgba(120, 120, 120, 0.28);
 }
-.book-entry .ocr-box.title,
-.book-entry .ocr-box.author,
-.book-entry .ocr-box.ocr-box-title,
-.book-entry .ocr-box.ocr-box-author {
+.book-entry .ocr-box-title,
+.book-entry .ocr-box-author {
   background: rgba(25, 25, 25, 0.45);
   outline: 1.5px solid var(--catalog-red);
 }

@@ -284,20 +284,20 @@ test('detected text preview shows one box per line with role classes and percent
   const boxes = container.querySelectorAll('.ocr-box');
   expect(boxes).toHaveLength(3);
 
-  expect(boxes[0]).toHaveClass('title');
+  expect(boxes[0]).toHaveClass('ocr-box-title');
   expect(boxes[0].style.left).toBe('10%');
   expect(boxes[0].style.top).toBe('20%');
   expect(boxes[0].style.width).toBe('70%');
   expect(boxes[0].style.height).toBe('8%');
 
-  expect(boxes[1]).toHaveClass('author');
+  expect(boxes[1]).toHaveClass('ocr-box-author');
   expect(boxes[1].style.left).toBe('15%');
   expect(boxes[1].style.top).toBe('35%');
   expect(boxes[1].style.width).toBe('50%');
   expect(boxes[1].style.height).toBe('5%');
 
-  expect(boxes[2]).not.toHaveClass('title');
-  expect(boxes[2]).not.toHaveClass('author');
+  expect(boxes[2]).not.toHaveClass('ocr-box-title');
+  expect(boxes[2]).not.toHaveClass('ocr-box-author');
   expect(boxes[2].style.left).toBe('20%');
   expect(boxes[2].style.top).toBe('80%');
   expect(boxes[2].style.width).toBe('40%');

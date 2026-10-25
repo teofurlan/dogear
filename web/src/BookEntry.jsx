@@ -166,7 +166,7 @@ export default function BookEntry({getToken, onCreated}) {
               {lines.map((line, index) => (
                 <span
                   key={index}
-                  className={`ocr-box${line.role ? ` ${line.role} ocr-box-${line.role}` : ''}`}
+                  className={`ocr-box${line.role ? ` ocr-box-${line.role}` : ''}`}
                   style={{
                     left: `${line.box[0] * 100}%`,
                     top: `${line.box[1] * 100}%`,

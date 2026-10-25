@@ -27,6 +27,6 @@ export async function identifyBook(getToken, file, {signal} = {}) {
       (result.author !== null && (typeof result.author !== 'string' || result.author.length > 300)) ||
       typeof result.text !== 'string' || result.text.length > 2000 ||
       (result.lines !== undefined && (!Array.isArray(result.lines) ||
-        result.lines.some(l => !l || typeof l.text !== 'string' || !Array.isArray(l.box) || l.box.length !== 4)))) throw new BooksError(503);
+        result.lines.some(l => !l || typeof l.text !== 'string' || !Array.isArray(l.box) || l.box.length !== 4 || !l.box.every(Number.isFinite))))) throw new BooksError(503);
   return result;
 }
