@@ -122,7 +122,7 @@ test('saving a book with a cover photo uploads the cover to the server', async (
   expect(receive).toHaveBeenCalledWith({...saved, title: 'Photo Book', has_cover_photo: true});
 });
 
-test('saving a book succeeds even if cover upload fails (degrades gracefully)', async () => {
+test('keeps the book and reports when the cover photo upload fails', async () => {
   const receive = vi.fn();
   identifyBook.mockResolvedValue({title: 'Photo Book', author: null, text: ''});
   uploadCover.mockRejectedValue(new Error('R2 unavailable'));
@@ -135,6 +135,18 @@ test('saving a book succeeds even if cover upload fails (degrades gracefully)', 
   fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
   await waitFor(() => expect(receive).toHaveBeenCalledWith(saved));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText('Saved “Synthetic book” to your library, but its cover photo could not be stored.')).toBeInTheDocument();
+});
+
+test('keeps the created book unchanged when the upload response is not a book', async () => {
+  const receive = vi.fn();
+  identifyBook.mockResolvedValue({title: 'Photo Book', author: null, text: ''});
+  uploadCover.mockResolvedValue({});
+  render(<BookEntry getToken={vi.fn()} onCreated={receive} />); open();
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [new File(['image'], 'cover.png', {type: 'image/png'})]}});
+  expect(await screen.findByDisplayValue('Photo Book')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
+  await waitFor(() => expect(receive).toHaveBeenCalledWith(saved));
   expect(screen.getByText('Saved “Synthetic book” to your library.')).toBeInTheDocument();
 });
 

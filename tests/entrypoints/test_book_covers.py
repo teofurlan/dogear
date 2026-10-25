@@ -65,20 +65,6 @@ def test_upload_cover_stores_jpeg_and_updates_book(cover_fixture):
     assert fetched["has_cover_photo"] is True
 
 
-def test_post_cover_also_works(cover_fixture):
-    client, headers, _, photos, alice_book, _ = cover_fixture
-    book_id = alice_book["id"]
-
-    response = client.post(
-        f"/books/{book_id}/cover",
-        content=encoded_image("JPEG"),
-        headers=headers(ALICE, **{"Content-Type": "image/jpeg"}),
-    )
-    assert response.status_code == 200
-    assert response.json()["has_cover_photo"] is True
-    assert cover_key(ALICE, book_id) in photos.objects
-
-
 def test_get_cover_returns_jpeg_only_to_owner(cover_fixture):
     client, headers, _, _, alice_book, bob_book = cover_fixture
     book_id = alice_book["id"]

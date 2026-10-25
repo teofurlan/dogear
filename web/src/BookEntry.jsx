@@ -50,19 +50,20 @@ export default function BookEntry({getToken, onCreated}) {
     try {
       let book = await createBook(getToken, {title: title.trim(), author: author.trim() || null}, {signal: controller.signal});
       if (controller.signal.aborted) return;
+      let photoFailed = false;
       if (coverFile) {
         try {
           const updated = await uploadCover(getToken, book.id, coverFile, {signal: controller.signal});
-          if (updated && updated.has_cover_photo) {
-            book = updated;
-          } else {
-            book = {...book, has_cover_photo: true};
-          }
+          if (updated && typeof updated.id === 'string' && typeof updated.title === 'string') book = updated;
         } catch {
-          // Degrade: saving the book still succeeds without the photo if storage is unavailable.
+          // The book is already saved; keep it and tell the reader the photo was not stored.
+          photoFailed = true;
         }
       }
-      onCreated(book); close(); setNotice(`Saved “${book.title}” to your library.`);
+      onCreated(book); close();
+      setNotice(photoFailed
+        ? `Saved “${book.title}” to your library, but its cover photo could not be stored.`
+        : `Saved “${book.title}” to your library.`);
     } catch (problem) {
       if (!controller.signal.aborted) setError(problem.status === 401
         ? 'Your session ended. Sign in again before saving a book.'
