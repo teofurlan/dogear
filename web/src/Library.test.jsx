@@ -93,3 +93,41 @@ test('book returning 404 shows not in your library state with back to library bu
   expect(await screen.findByRole('heading', {name: 'Your library'})).toBeInTheDocument();
   expect(window.location.hash).toBe('');
 });
+
+test('book cards show a pending badge and open in one tap', async () => {
+  listQuotes.mockResolvedValue([{id: 'q1', book_id: book.id}, {id: 'q2', book_id: book.id}]);
+  render(<App />);
+  const badge = await screen.findByText('2 to review');
+  expect(badge).toBeInTheDocument();
+  await userEvent.click(badge);
+  expect(await screen.findByRole('heading', {name: 'View of A quiet afternoon'})).toBeInTheDocument();
+});
+
+test('unloaded books with pending quotes are fetched and listed in the banner', async () => {
+  const unloaded = {id: '000000000000000000000088', title: 'Unloaded volume', author: 'Author B'};
+  listBooks.mockResolvedValue([book]);
+  getBook.mockResolvedValue(unloaded);
+  listQuotes.mockResolvedValue([
+    {id: 'q1', book_id: book.id},
+    {id: 'q2', book_id: unloaded.id},
+    {id: 'q3', book_id: unloaded.id}
+  ]);
+  render(<App />);
+  expect(await screen.findByText('3 quotes are waiting for review.')).toBeInTheDocument();
+  const bannerLink = await screen.findByRole('link', {name: /Review “Unloaded volume”/});
+  expect(bannerLink).toBeInTheDocument();
+  await userEvent.click(bannerLink);
+  expect(await screen.findByRole('heading', {name: 'View of Unloaded volume'})).toBeInTheDocument();
+});
+
+test('returning from a book refreshes pending quote counts', async () => {
+  listQuotes.mockResolvedValueOnce([{id: 'q1', book_id: book.id}]);
+  render(<App />);
+  expect(await screen.findByText('1 to review')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('link', {name: 'A quiet afternoon by Ada Reed'}));
+  expect(await screen.findByRole('heading', {name: 'View of A quiet afternoon'})).toBeInTheDocument();
+  listQuotes.mockResolvedValueOnce([]);
+  await userEvent.click(screen.getByRole('button', {name: 'Back to library'}));
+  expect(await screen.findByRole('heading', {name: 'Your library'})).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByText(/to review/)).not.toBeInTheDocument());
+});

@@ -62,3 +62,8 @@ test('back button has underline and pointer cursor', () => {
   expect(rule('.back-button').getPropertyValue('text-decoration')).toMatch(/underline/);
   expect(rule('.back-button').getPropertyValue('cursor')).toBe('pointer');
 });
+
+test('pending badge has red background and bold text', () => {
+  expect(rule('.pending-badge').getPropertyValue('background')).toBe('var(--catalog-red)');
+  expect(rule('.pending-badge').getPropertyValue('font-weight')).toBe('600');
+});

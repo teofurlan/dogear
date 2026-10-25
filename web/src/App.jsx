@@ -33,6 +33,15 @@ function Library({getToken, signIn}) {
   const [bookError, setBookError] = useState(null);
   const [loadingBookId, setLoadingBookId] = useState(null);
   const [waiting, setWaiting] = useState([]);
+  const pendingByBook = useMemo(() => {
+    const counts = new Map();
+    for (const quote of waiting) {
+      if (quote.book_id) {
+        counts.set(quote.book_id, (counts.get(quote.book_id) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [waiting]);
   const pushed = useRef(false);
   const heading = useRef(null);
   useEffect(() => {
@@ -159,6 +168,23 @@ function Library({getToken, signIn}) {
     return () => controller.abort();
   }, [bookId, visibleBooks, extraBooks, notFoundId, bookError, status, getToken]);
 
+  useEffect(() => {
+    if (!waiting.length) return undefined;
+    const controller = new AbortController();
+    const missingIds = [...new Set(waiting.map(q => q.book_id))]
+      .filter(id => id && !visibleBooks.some(b => b.id === id) && !extraBooks[id]);
+    for (const id of missingIds) {
+      getBook(getToken, id, {signal: controller.signal})
+        .then(book => {
+          if (!controller.signal.aborted) {
+            setExtraBooks(previous => ({...previous, [book.id]: book}));
+          }
+        })
+        .catch(() => {});
+    }
+    return () => controller.abort();
+  }, [waiting, visibleBooks, extraBooks, getToken]);
+
   const openBookData = bookId ? (visibleBooks.find(item => item.id === bookId) || extraBooks[bookId] || null) : null;
   if (bookId && (status === 'loading' || loadingBookId === bookId)) return <p role="status" className="feedback">{status === 'loading' ? 'Loading your library…' : 'Loading book…'}</p>;
   if (bookId && notFoundId === bookId) {
@@ -175,17 +201,38 @@ function Library({getToken, signIn}) {
     </section>;
   }
   if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} />;
-  const waitingBook = waiting.length ? visibleBooks.find(item => item.id === waiting[0].book_id) : null;
 
   return <>
     <div className="heading-row"><h1 ref={heading} tabIndex={-1}>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
     <p className="intro-copy">A shelf of books worth finding again.</p>
-    {waiting.length ? <section className="review-banner" aria-label="Quotes to review"><p>{waiting.length} {waiting.length === 1 ? 'quote is' : 'quotes are'} waiting for review.</p><a href={'#book=' + waiting[0].book_id} onClick={event => {event.preventDefault(); openBook(waiting[0].book_id);}}>Review{waitingBook ? ` “${waitingBook.title}”` : ''}</a></section> : null}
+    {waiting.length ? <section className="review-banner" aria-label="Quotes to review">
+      <p>{waiting.length} {waiting.length === 1 ? 'quote is' : 'quotes are'} waiting for review.</p>
+      <div className="review-links">
+        {[...pendingByBook.entries()].map(([id, count]) => {
+          const b = visibleBooks.find(item => item.id === id) || extraBooks[id];
+          return <a key={id} href={'#book=' + id} onClick={event => {event.preventDefault(); openBook(id);}}>
+            Review{b ? ` “${b.title}”` : ''}{pendingByBook.size > 1 ? ` (${count})` : ''}
+          </a>;
+        })}
+      </div>
+    </section> : null}
     {status !== 'loading' ? <BookEntry getToken={getToken} onCreated={book => setAddedBooks(previous => [...previous, book])} /> : null}
     {status === 'loading' ? <><p role="status" className="feedback">Loading your library…</p><ul className="book-grid skeleton-grid" aria-hidden="true">{[0,1,2,3].map(index => <li key={index} className="book skeleton"><div className="cover-wrap" /><div className="book-copy" /></li>)}</ul></> : null}
     {error ? <section className="feedback" role="status"><p>{error === 'session' ? 'Your session ended. Sign in again to view your books.' : 'Your library could not load. Your books have not changed.'}</p><button className="retry-button" onClick={error === 'session' ? signIn : () => books.length ? more() : setRetry(value => value + 1)}>{error === 'session' ? 'Sign in again' : 'Try again'}</button></section> : null}
     {status === 'ready' && !visibleBooks.length && !error ? <section className="empty-library" role="status"><h2>Your library is empty.</h2><p>Add your first book from its cover photo or enter the details yourself.</p></section> : null}
-    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => <li key={book.id} className="book"><a className="book-link" href={'#book=' + book.id} aria-label={book.author ? `${book.title} by ${book.author}` : book.title} onClick={event => {event.preventDefault(); openBook(book.id);}}><BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} /><div className="book-copy"><h2 className="book-title">{book.title}</h2><p className="book-author">{book.author || 'Author not provided'}</p></div></a></li>)}</ul> : null}
+    {visibleBooks.length ? <ul className="book-grid" aria-label="Books in your library">{visibleBooks.map(book => {
+      const pendingCount = pendingByBook.get(book.id) || 0;
+      return <li key={book.id} className="book">
+        <a className="book-link" href={'#book=' + book.id} aria-label={book.author ? `${book.title} by ${book.author}` : book.title} onClick={event => {event.preventDefault(); openBook(book.id);}}>
+          <BookCover book={book} url={covers[book.id]} pending={!Object.hasOwn(covers, book.id)} />
+          <div className="book-copy">
+            <h2 className="book-title">{book.title}</h2>
+            <p className="book-author">{book.author || 'Author not provided'}</p>
+            {pendingCount > 0 ? <span className="pending-badge">{pendingCount} to review</span> : null}
+          </div>
+        </a>
+      </li>;
+    })}</ul> : null}
     {hasMore && !error ? <button className="load-more" disabled={status === 'more'} aria-busy={status === 'more'} onClick={more}>{status === 'more' ? 'Loading more books…' : 'Load more books'}</button> : null}
   </>;
 }
