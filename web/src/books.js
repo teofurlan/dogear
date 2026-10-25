@@ -30,7 +30,15 @@ export async function listBooks(getToken, {after, q, signal} = {}) {
 export const getBook = (getToken, bookId, {signal} = {}) =>
   api(getToken, `/books/${bookId}`, {signal});
 
-export const fetchCover = (getToken, bookId, {signal} = {}) =>
+export const updateBook = (getToken, bookId, {title, author}) =>
+  api(getToken, `/books/${bookId}`, {
+    method: 'PATCH', body: JSON.stringify(author ? {title, author} : {title}), contentType: 'application/json'
+  });
+
+export const deleteBook = (getToken, bookId) =>
+  api(getToken, `/books/${bookId}`, {method: 'DELETE', timeout: 20000});
+
+export const fetchCover =(getToken, bookId, {signal} = {}) =>
   api(getToken, `/books/${bookId}/cover`, {as: 'blob', signal});
 
 export const uploadCover = (getToken, bookId, file, {signal} = {}) =>

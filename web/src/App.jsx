@@ -145,6 +145,30 @@ function Library({getToken, signIn}) {
     };
   }, []);
 
+  function forgetCover(id) {
+    const cover = coverCache.current.get(id);
+    if (cover?.startsWith('blob:')) {URL.revokeObjectURL(cover); blobUrls.current.delete(cover);}
+    coverCache.current.delete(id);
+    setCovers(({[id]: _, ...rest}) => rest);
+  }
+
+  function replaceBook(updated) {
+    const swap = list => list.map(item => item.id === updated.id ? updated : item);
+    setBooks(swap); setAddedBooks(swap);
+    setExtraBooks(previous => previous[updated.id] ? {...previous, [updated.id]: updated} : previous);
+    forgetCover(updated.id);  // a new title or author may match another cover
+  }
+
+  function removeBook(id) {
+    const drop = list => list.filter(item => item.id !== id);
+    setBooks(drop); setAddedBooks(drop);
+    setExtraBooks(({[id]: _, ...rest}) => rest);
+    setWaiting(previous => previous.filter(quote => quote.book_id !== id));
+    forgetCover(id);
+    closeBook();
+    setBookId(null);  // history.back() lands later; do not look the deleted book up meanwhile
+  }
+
   async function more() {
     if (busy.current || !hasMore) return;
     busy.current = true;
@@ -215,7 +239,7 @@ function Library({getToken, signIn}) {
       <div><button type="button" className="back-button" onClick={closeBook}>Back to library</button></div>
     </section>;
   }
-  if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} />;
+  if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} onChanged={replaceBook} onDeleted={removeBook} />;
 
   return <>
     <div className="heading-row"><h1 ref={heading} tabIndex={-1}>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
