@@ -422,7 +422,7 @@ def create_app() -> FastAPI:
                 subject, book_id, body.cover_id, body.title, body.author
             )
         except BookChanged:
-            raise HTTPException(409, "Book changed")
+            raise HTTPException(409, "Book changed") from None
         except BooksUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
         if updated is None:
