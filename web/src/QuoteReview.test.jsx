@@ -19,12 +19,29 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn();
 });
 
-test('empty states explain what happens next', async () => {
+test('empty book shows empty state inviting the reader to photograph a page', async () => {
   render(<QuoteReview getToken={getToken} bookId={id} />);
-  expect(await screen.findByText("Tonight's run will find your highlights")).toBeInTheDocument();
-  expect(screen.getByText('No kept quotes yet.')).toBeInTheDocument();
+  expect(await screen.findByText('No quotes yet. Photograph a highlighted page to add the first one.')).toBeInTheDocument();
+  expect(screen.queryByText("Tonight's run will find your highlights")).not.toBeInTheDocument();
+  expect(screen.queryByText('No kept quotes yet.')).not.toBeInTheDocument();
   expect(listQuotes).toHaveBeenCalledWith(getToken, {bookId: id, status: 'pending'}, expect.anything());
   expect(listQuotes).toHaveBeenCalledWith(getToken, {bookId: id, status: 'kept'}, expect.anything());
+});
+
+test('shows tonight run note when kept quotes exist but pending is empty', async () => {
+  kept = [quote({status: 'kept', text: 'Saved passage'})];
+  render(<QuoteReview getToken={getToken} bookId={id} />);
+  expect(await screen.findByText("Tonight's run will find your highlights")).toBeInTheDocument();
+  expect(screen.getByText('Saved passage')).toBeInTheDocument();
+  expect(screen.queryByText('No quotes yet. Photograph a highlighted page to add the first one.')).not.toBeInTheDocument();
+});
+
+test('shows no kept quotes note when pending quotes exist but kept is empty', async () => {
+  pending = [quote({status: 'pending', text: 'Pending passage'})];
+  render(<QuoteReview getToken={getToken} bookId={id} />);
+  expect(await screen.findByText('No kept quotes yet.')).toBeInTheDocument();
+  expect(screen.queryByText("Tonight's run will find your highlights")).not.toBeInTheDocument();
+  expect(screen.queryByText('No quotes yet. Photograph a highlighted page to add the first one.')).not.toBeInTheDocument();
 });
 
 test('keep sends the edited text and moves the quote to kept', async () => {
@@ -65,7 +82,7 @@ test('kept quotes can be edited and deleted', async () => {
   expect(await screen.findByText('New')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', {name: 'Delete quote'}));
   expect(screen.queryByText('New')).not.toBeInTheDocument();
-  expect(screen.getByText('No kept quotes yet.')).toBeInTheDocument();
+  expect(screen.getByText('No quotes yet. Photograph a highlighted page to add the first one.')).toBeInTheDocument();
   expect(deleteQuote).not.toHaveBeenCalled();
   await waitFor(() => expect(deleteQuote).toHaveBeenCalledWith(getToken, 'q1'));
 });
@@ -226,12 +243,14 @@ test('a load failure shows error and retry button without empty states, and Try 
   expect(screen.getByRole('button', {name: 'Try again'})).toHaveClass('retry-button');
   expect(screen.queryByText("Tonight's run will find your highlights")).not.toBeInTheDocument();
   expect(screen.queryByText('No kept quotes yet.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No quotes yet. Photograph a highlighted page to add the first one.')).not.toBeInTheDocument();
 
   // Clicking "Try again" re-runs listQuotes
   listQuotes.mockImplementation(async (_t, {status}) => status === 'pending' ? [] : []);
   await userEvent.click(screen.getByRole('button', {name: 'Try again'}));
-  expect(await screen.findByText("Tonight's run will find your highlights")).toBeInTheDocument();
-  expect(screen.getByText('No kept quotes yet.')).toBeInTheDocument();
+  expect(await screen.findByText('No quotes yet. Photograph a highlighted page to add the first one.')).toBeInTheDocument();
+  expect(screen.queryByText("Tonight's run will find your highlights")).not.toBeInTheDocument();
+  expect(screen.queryByText('No kept quotes yet.')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', {name: 'Try again'})).not.toBeInTheDocument();
   expect(screen.queryByText('Your quotes could not load. Reload the page to try again.')).not.toBeInTheDocument();
 });

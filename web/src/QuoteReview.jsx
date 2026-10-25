@@ -219,13 +219,17 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
       <p role="alert" className="quote-error">Your quotes could not load. Reload the page to try again.</p>
       <button type="button" className="retry-button" onClick={() => setRetryCount(count => count + 1)}>Try again</button>
     </> : null}
-    {loading ? <p role="status" className="feedback">Loading quotes…</p> : !loadError ? <>
-      {pending.length ? <ul className="quote-list" aria-label="Quotes to review">{pending.map(quote => <PendingQuote key={quote.id} getToken={getToken} quote={quote} onKept={keep} onDeleted={drop} onSessionExpired={onSessionExpired} />)}</ul>
-        : <p className="empty-note">Tonight's run will find your highlights</p>}
-      <h3>Kept quotes</h3>
-      {kept.length ? <ul className="quote-list" aria-label="Kept quotes">{kept.map(quote => <KeptQuote key={quote.id} getToken={getToken} quote={quote} onChanged={replace} onDeleted={drop} onSessionExpired={onSessionExpired} />)}</ul>
-        : <p className="empty-note">No kept quotes yet.</p>}
-    </> : null}
+    {loading ? <p role="status" className="feedback">Loading quotes…</p> : !loadError ? (
+      !pending.length && !kept.length ? (
+        <p className="empty-note">No quotes yet. Photograph a highlighted page to add the first one.</p>
+      ) : <>
+        {pending.length ? <ul className="quote-list" aria-label="Quotes to review">{pending.map(quote => <PendingQuote key={quote.id} getToken={getToken} quote={quote} onKept={keep} onDeleted={drop} onSessionExpired={onSessionExpired} />)}</ul>
+          : <p className="empty-note">Tonight's run will find your highlights</p>}
+        <h3>Kept quotes</h3>
+        {kept.length ? <ul className="quote-list" aria-label="Kept quotes">{kept.map(quote => <KeptQuote key={quote.id} getToken={getToken} quote={quote} onChanged={replace} onDeleted={drop} onSessionExpired={onSessionExpired} />)}</ul>
+          : <p className="empty-note">No kept quotes yet.</p>}
+      </>
+    ) : null}
     <form className="add-passage" onSubmit={add}>
       <label htmlFor="add-passage">Add a passage you highlighted</label>
       <textarea id="add-passage" rows={3} maxLength={5000} value={draft} onChange={event => setDraft(event.target.value)} disabled={adding} />
