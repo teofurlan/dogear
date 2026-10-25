@@ -20,9 +20,10 @@ function status(waiting, read) {
   return 'No pages yet. Photograph a page you highlighted.';
 }
 
-export default function PageCapture({getToken, bookId}) {
+export default function PageCapture({getToken, bookId, onSessionExpired, onUploadingChange}) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [waiting, setWaiting] = useState(null);
   const [read, setRead] = useState(0);
   const alive = useRef(true);
@@ -34,8 +35,10 @@ export default function PageCapture({getToken, bookId}) {
       if (!alive.current || !Array.isArray(pages)) return;
       setWaiting(pages.filter(page => page.status === 'pending' || page.status === 'processing').length);
       setRead(pages.filter(page => page.status === 'processed').length);
-    } catch { /* the count is a hint; uploads still work without it */ }
-  }, [getToken, bookId]);
+    } catch (problem) {
+      if (problem?.status === 401) onSessionExpired?.();
+    }
+  }, [getToken, bookId, onSessionExpired]);
 
   useEffect(() => {
     alive.current = true;
@@ -45,11 +48,12 @@ export default function PageCapture({getToken, bookId}) {
 
   async function upload(files) {
     if (!files.length || running.current) return;
-    running.current = true; setBusy(true);
+    running.current = true; setBusy(true); onUploadingChange?.(true);
     const patch = (index, state, message = '') => alive.current && setItems(previous => previous.map((item, i) => i === index ? {...item, state, message} : item));
     setItems(files.map(file => ({name: file.name || 'Photo', state: 'waiting', message: ''})));
     for (const [index, file] of files.entries()) {
       if (!alive.current) break;
+      setProgress({current: index + 1, total: files.length});
       patch(index, 'uploading');
       let image;
       try {
@@ -63,11 +67,19 @@ export default function PageCapture({getToken, bookId}) {
         patch(index, 'done');
       } catch (problem) {
         patch(index, 'error', failure(problem));
-        if (problem?.status === 401) break;
+        if (problem?.status === 401) {
+          onSessionExpired?.();
+          break;
+        }
       }
     }
     running.current = false;
-    if (alive.current) {setBusy(false); refresh();}
+    if (alive.current) {
+      setBusy(false);
+      setProgress(null);
+      onUploadingChange?.(false);
+      refresh();
+    }
   }
 
   const line = item => item.state === 'error' ? `${item.name}: ${item.message}`
@@ -75,6 +87,7 @@ export default function PageCapture({getToken, bookId}) {
 
   return <section className="page-capture" aria-labelledby="capture-title">
     <h2 id="capture-title">Pages</h2>
+    {progress ? <p className="upload-progress-summary" role="status">Uploading {progress.current} of {progress.total}…</p> : null}
     <label className="capture-zone">
       <input type="file" accept="image/*" capture="environment" multiple disabled={busy}
         onChange={event => {upload([...event.target.files]); event.target.value = '';}} />
