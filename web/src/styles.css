@@ -39,7 +39,7 @@ img { display: block; max-width: 100%; }
 .entry-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1.5rem; }
 .book-entry .cancel-button { border: 0; background: transparent; color: var(--catalog-ink); text-decoration: underline; text-underline-offset: .3em; }
 .book-entry summary { cursor: pointer; min-height: 44px; padding-block: .5rem; text-decoration: underline; text-underline-offset: .3em; }
-.detected-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.detected-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12rem; overflow-y: auto; }
 
 html {
   background: var(--catalog-paper);

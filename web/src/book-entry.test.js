@@ -39,3 +39,25 @@ test('requests work on browsers without AbortSignal.any (iOS Safari before 17.4)
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
 });
+
+test('identifyBook accepts valid lines and rejects malformed lines', async () => {
+  const photo = new File(['photo'], 'cover.png', {type: 'image/png'});
+  const valid = {
+    title: 'Book', author: null, text: 'Book',
+    lines: [{text: 'Book', box: [0.1, 0.2, 0.3, 0.4], role: 'title'}]
+  };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, json: async () => valid}));
+  expect(await identifyBook(async () => 'token', photo)).toEqual(valid);
+
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({title: 'Book', author: null, text: 'Book', lines: 'not-an-array'})
+  }));
+  await expect(identifyBook(async () => 'token', photo)).rejects.toThrow();
+
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({title: 'Book', author: null, text: 'Book', lines: [{text: 'Line', box: [1, 2]}]})
+  }));
+  await expect(identifyBook(async () => 'token', photo)).rejects.toThrow();
+});

@@ -39,7 +39,7 @@ an Auth0 **API access token** (not an ID token).
 | `GET /books/{book_id}` | | `200`, the book payload (including `has_cover_photo`); `404` when nonexistent or owned by another reader |
 | `PATCH /books/{book_id}` | `{"title":"...","author":"..."}`, same rules as `POST /books` | `200`, the updated book; leaving `author` out clears it; `404` for an unknown or other-owner book |
 | `DELETE /books/{book_id}` | | `204`; also deletes its quotes (with crops), pages and stored photos; `404` for an unknown or other-owner book; `503` when book or photo storage is unavailable |
-| `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"..."}`; creates nothing |
+| `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"...","lines":[{"text":"...","box":[x,y,w,h],"role":"title"}]}`; creates nothing |
 | `PUT /books/{book_id}/cover` | Raw `image/jpeg` or `image/png` cover photo | `200`, the book with `has_cover_photo: true`; `404` for an unknown or other-owner book; `503` when storage is unavailable |
 | `GET /books/{book_id}/cover` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` without a stored photo |
 | `PUT /books/{book_id}/catalog-cover` | `{"cover_id": 12345, "title": "...", "author": "..."}` or `{"cover_id": null, ...}` | `200`, the book with `catalog_cover_id` and `catalog_checked_at`; `404` for an unknown or other-owner book; `409` when title or author no longer match |
@@ -69,7 +69,9 @@ is saved, and reports it if that upload fails. Editing a book's title or author 
 `POST /books/identify` takes the raw image bytes, not multipart or JSON. Local Tesseract OCR
 suggests a title and author from text size and layout; it is not catalog verification, and the
 web app always lets the reader correct the suggestion before saving. This route does not store
-the photo.
+the photo. The response returns `title`, `author`, `text`, and up to 200 detected `lines`.
+Each line includes `text`, a normalized bounding `box` `[x, y, width, height]` (0..1 in the
+upright photo frame, rounded to 4 decimals), and its `role` (`"title"`, `"author"`, or `null`).
 It needs Tesseract with Spanish data, but no Ollama or external catalog service.
 
 Image limits, shared with page uploads: 6 MiB, 20 megapixels, 10,000 pixels per side, a

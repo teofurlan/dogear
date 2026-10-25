@@ -17,6 +17,18 @@ def test_cover_suggestions_require_auth_and_never_create_a_book(auth, monkeypatc
             "title": "Synthetic book",
             "author": "Ada Reed",
             "text": "Synthetic book Ada Reed",
+            "lines": [
+                {
+                    "text": "Synthetic book",
+                    "box": [0.1, 0.1, 0.8, 0.1],
+                    "role": "title",
+                },
+                {
+                    "text": "Ada Reed",
+                    "box": [0.2, 0.4, 0.5, 0.05],
+                    "role": "author",
+                },
+            ],
         }
 
     monkeypatch.setattr(api, "identify_cover", identify, raising=False)
@@ -27,7 +39,20 @@ def test_cover_suggestions_require_auth_and_never_create_a_book(auth, monkeypatc
         headers={"Authorization": f"Bearer {issue()}", "Content-Type": "image/png"},
     )
     assert response.status_code == 200
-    assert response.json()["title"] == "Synthetic book"
+    data = response.json()
+    assert data["title"] == "Synthetic book"
+    assert data["lines"] == [
+        {
+            "text": "Synthetic book",
+            "box": [0.1, 0.1, 0.8, 0.1],
+            "role": "title",
+        },
+        {
+            "text": "Ada Reed",
+            "box": [0.2, 0.4, 0.5, 0.05],
+            "role": "author",
+        },
+    ]
     assert calls == [b"photo"]
     # No storage configured: identification must not require or write to MongoDB.
     assert (

@@ -256,3 +256,103 @@ test('a photo dropped while a cover is being read is ignored', async () => {
   fireEvent.drop(dropTarget, {dataTransfer: {files: [new File(['b'], 'b.png', {type: 'image/png'})]}});
   expect(identifyBook).toHaveBeenCalledTimes(1);
 });
+
+test('detected text preview shows one box per line with role classes and percentage coordinates', async () => {
+  const sampleLines = [
+    {text: 'The Title', box: [0.1, 0.2, 0.7, 0.08], role: 'title'},
+    {text: 'The Author', box: [0.15, 0.35, 0.5, 0.05], role: 'author'},
+    {text: 'Publisher Notes', box: [0.2, 0.8, 0.4, 0.03], role: null},
+  ];
+  identifyBook.mockResolvedValue({
+    title: 'The Title',
+    author: 'The Author',
+    text: 'The Title\nThe Author\nPublisher Notes',
+    lines: sampleLines,
+  });
+  const {container} = render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const photo = new File(['image'], 'cover.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo]}});
+
+  const img = await screen.findByAltText('Cover photo with detected text highlighted');
+  expect(img).toBeInTheDocument();
+  expect(img).toHaveAttribute('src', 'blob:mock-url');
+  expect(screen.getByText('Highlighted: text the photo reading found. Darker: used for the title and author.')).toBeInTheDocument();
+
+  const boxesContainer = container.querySelector('.cover-ocr-boxes');
+  expect(boxesContainer).toHaveAttribute('aria-hidden', 'true');
+
+  const boxes = container.querySelectorAll('.ocr-box');
+  expect(boxes).toHaveLength(3);
+
+  expect(boxes[0]).toHaveClass('title');
+  expect(boxes[0].style.left).toBe('10%');
+  expect(boxes[0].style.top).toBe('20%');
+  expect(boxes[0].style.width).toBe('70%');
+  expect(boxes[0].style.height).toBe('8%');
+
+  expect(boxes[1]).toHaveClass('author');
+  expect(boxes[1].style.left).toBe('15%');
+  expect(boxes[1].style.top).toBe('35%');
+  expect(boxes[1].style.width).toBe('50%');
+  expect(boxes[1].style.height).toBe('5%');
+
+  expect(boxes[2]).not.toHaveClass('title');
+  expect(boxes[2]).not.toHaveClass('author');
+  expect(boxes[2].style.left).toBe('20%');
+  expect(boxes[2].style.top).toBe('80%');
+  expect(boxes[2].style.width).toBe('40%');
+  expect(boxes[2].style.height).toBe('3%');
+
+  const details = container.querySelector('details');
+  expect(details).toBeInTheDocument();
+  expect(details.open).toBe(false);
+});
+
+test('object URL is revoked when form closes, photo changes, and component unmounts', async () => {
+  const sampleLines = [{text: 'Book', box: [0.1, 0.1, 0.8, 0.1], role: 'title'}];
+  identifyBook.mockResolvedValue({title: 'Book', author: null, text: 'Book', lines: sampleLines});
+
+  const {unmount} = render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const photo1 = new File(['image1'], 'cover1.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo1]}});
+  await screen.findByAltText('Cover photo with detected text highlighted');
+  expect(globalThis.URL.createObjectURL).toHaveBeenCalledTimes(1);
+
+  // Changing photo revokes the previous URL
+  const photo2 = new File(['image2'], 'cover2.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo2]}});
+  await waitFor(() => expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url'));
+
+  // Closing the form revokes URL
+  globalThis.URL.revokeObjectURL.mockClear();
+  fireEvent.click(screen.getByRole('button', {name: 'Cancel'}));
+  expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+
+  // Reopening and unmounting revokes URL
+  globalThis.URL.revokeObjectURL.mockClear();
+  open();
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo1]}});
+  await screen.findByAltText('Cover photo with detected text highlighted');
+  unmount();
+  expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+});
+
+test('no preview shown and preview cleaned up when reading fails', async () => {
+  identifyBook.mockRejectedValue(new Error('OCR failed'));
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const photo = new File(['image'], 'cover.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo]}});
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(screen.queryByAltText('Cover photo with detected text highlighted')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Highlighted: text the photo reading found/)).not.toBeInTheDocument();
+});
+
+test('no preview shown if lines is missing or empty', async () => {
+  identifyBook.mockResolvedValue({title: 'Book Only', author: null, text: 'Book Only', lines: []});
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  const photo = new File(['image'], 'cover.png', {type: 'image/png'});
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [photo]}});
+  expect(await screen.findByDisplayValue('Book Only')).toBeVisible();
+  expect(screen.queryByAltText('Cover photo with detected text highlighted')).not.toBeInTheDocument();
+  expect(screen.getByText('Book Only')).toBeInTheDocument();
+});

@@ -9,6 +9,8 @@ export default function BookEntry({getToken, onCreated}) {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [text, setText] = useState('');
+  const [lines, setLines] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -19,10 +21,34 @@ export default function BookEntry({getToken, onCreated}) {
   const saving = useRef(false);
   const toggle = useRef(null);
   const cameraButton = useRef(null);
-  useEffect(() => () => request.current?.abort(), []);
+  const previewRef = useRef(null);
+
+  function revokePreview() {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current);
+      previewRef.current = null;
+    }
+    setPreviewUrl(null);
+  }
+
+  function setPreview(file) {
+    revokePreview();
+    if (file) {
+      const url = URL.createObjectURL(file);
+      previewRef.current = url;
+      setPreviewUrl(url);
+    }
+  }
+
+  useEffect(() => () => {
+    request.current?.abort();
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+  }, []);
 
   function close() {
     request.current?.abort();
+    revokePreview();
+    setLines([]);
     setOpen(false); setTitle(''); setAuthor(''); setText(''); setError(''); setStatus('idle'); setDragOver(false); setCoverFile(null); setCameraOpen(false);
     toggle.current?.focus();
   }
@@ -30,15 +56,25 @@ export default function BookEntry({getToken, onCreated}) {
   async function read(file) {
     if (!file || saving.current) return;
     request.current?.abort();
+    revokePreview(); setLines([]);
     const controller = new AbortController(); request.current = controller;
     setStatus('reading'); setError(''); setText(''); setCoverFile(file);
     try {
       const result = await identifyBook(getToken, file, {signal: controller.signal});
       if (controller.signal.aborted) return;
       setTitle(result.title); setAuthor(result.author || ''); setText(result.text);
+      if (Array.isArray(result.lines) && result.lines.length > 0) {
+        setLines(result.lines);
+        setPreview(file);
+      } else {
+        setLines([]);
+        revokePreview();
+      }
       if (!result.title) setError('No readable title was found. Enter the details manually or try a clearer photo.');
     } catch (problem) {
       setCoverFile(null);
+      setLines([]);
+      revokePreview();
       if (!controller.signal.aborted) setError(problem.status === 401
         ? 'Your session ended. Sign in again before reading or saving a book.'
         : 'The cover could not be read. Enter the details manually, or try a JPEG or PNG under 6 MiB and 20 megapixels.');
@@ -118,6 +154,34 @@ export default function BookEntry({getToken, onCreated}) {
         />
       ) : null}
       {status === 'reading' ? <p role="status">Reading cover… You can cancel at any time.</p> : null}
+      {previewUrl && lines.length > 0 ? (
+        <figure className="cover-ocr-preview">
+          <div className="cover-ocr-wrap">
+            <img
+              src={previewUrl}
+              alt="Cover photo with detected text highlighted"
+              className="cover-ocr-photo"
+            />
+            <div className="cover-ocr-boxes" aria-hidden="true">
+              {lines.map((line, index) => (
+                <span
+                  key={index}
+                  className={`ocr-box${line.role ? ` ${line.role} ocr-box-${line.role}` : ''}`}
+                  style={{
+                    left: `${line.box[0] * 100}%`,
+                    top: `${line.box[1] * 100}%`,
+                    width: `${line.box[2] * 100}%`,
+                    height: `${line.box[3] * 100}%`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <figcaption className="cover-ocr-legend">
+            Highlighted: text the photo reading found. Darker: used for the title and author.
+          </figcaption>
+        </figure>
+      ) : null}
       {text ? <><p className="field-help">These are OCR suggestions, not a verified catalog match. Check the title and author.</p><details><summary>Detected text</summary><p className="detected-text">{text}</p></details></> : null}
       <label htmlFor="book-title">Title</label>
       <input id="book-title" name="title" value={title} onChange={event => setTitle(event.target.value)} required maxLength={300} autoFocus disabled={status !== 'idle'} />

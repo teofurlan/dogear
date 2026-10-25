@@ -56,10 +56,17 @@ class CatalogCoverInput(BaseModel):
     author: str | None = Field(default=..., min_length=1, max_length=300)
 
 
+class CoverLine(BaseModel):
+    text: str
+    box: list[float]
+    role: Literal["title", "author"] | None = None
+
+
 class CoverSuggestion(BaseModel):
     title: str
     author: str | None
     text: str
+    lines: list[CoverLine] = Field(default_factory=list)
 
 
 class Page(BaseModel):

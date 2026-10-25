@@ -34,7 +34,7 @@ class CoverError(Exception):
         self.status, self.message = status, message
 
 
-def suggest(tsv: str) -> dict:
+def suggest(tsv: str, width: int = 1, height: int = 1) -> dict:
     lines = defaultdict(list)
     for row in csv.DictReader(StringIO(tsv), delimiter="\t"):
         if row.get("level") != "5" or not row.get("text", "").strip():
@@ -47,23 +47,67 @@ def suggest(tsv: str) -> dict:
     for rows in lines.values():
         text = " ".join(row["text"].strip() for row in rows)
         if any(char.isalpha() for char in text):
-            ranked.append((max(int(row["height"]) for row in rows), text))
-    text = "\n".join(line for _, line in ranked)[:2000]
+            ranked.append((max(int(row["height"]) for row in rows), text, rows))
+    text = "\n".join(line for _, line, _ in ranked)[:2000]
     if not ranked:
-        return {"title": "", "author": None, "text": text}
-    largest = max(height for height, _ in ranked)
-    title = " ".join(line for height, line in ranked if height >= largest * 0.8)[:300]
+        return {"title": "", "author": None, "text": text, "lines": []}
+    largest = max(height for height, _, _ in ranked)
+    title = " ".join(
+        line for height, line, _ in ranked if height >= largest * 0.8
+    )[:300]
     others = [
-        (height, line)
-        for height, line in ranked
+        (height, idx, line)
+        for idx, (height, line, _) in enumerate(ranked)
         if largest * 0.45 <= height < largest * 0.8
     ]
-    author = max(others, default=(0, None), key=lambda item: item[0])[1]
+    author_choice = max(others, default=(0, None, None), key=lambda item: item[0])
+    author_idx = author_choice[1]
+    author = author_choice[2]
     if author:
         author = (
             author.removeprefix("by ").removeprefix("By ").removeprefix("por ")[:300]
         )
-    return {"title": title, "author": author, "text": text}
+
+    w_img = max(1, width)
+    h_img = max(1, height)
+
+    out_lines = []
+    for idx, (line_height, line_text, rows) in enumerate(ranked[:200]):
+        lefts = [int(r.get("left", 0) or 0) for r in rows]
+        tops = [int(r.get("top", 0) or 0) for r in rows]
+        rights = [
+            int(r.get("left", 0) or 0) + int(r.get("width", 0) or 0) for r in rows
+        ]
+        bottoms = [
+            int(r.get("top", 0) or 0) + int(r.get("height", 0) or 0) for r in rows
+        ]
+
+        box_left = min(lefts)
+        box_top = min(tops)
+        box_width = max(0, max(rights) - box_left)
+        box_height = max(0, max(bottoms) - box_top)
+
+        norm_x = min(1.0, max(0.0, round(box_left / w_img, 4)))
+        norm_y = min(1.0, max(0.0, round(box_top / h_img, 4)))
+        norm_w = min(1.0, max(0.0, round(box_width / w_img, 4)))
+        norm_h = min(1.0, max(0.0, round(box_height / h_img, 4)))
+
+        if line_height >= largest * 0.8:
+            role = "title"
+        elif idx == author_idx:
+            role = "author"
+        else:
+            role = None
+
+        out_lines.append(
+            {
+                "text": line_text,
+                "box": [norm_x, norm_y, norm_w, norm_h],
+                "role": role,
+            }
+        )
+
+    return {"title": title, "author": author, "text": text, "lines": out_lines}
 
 
 def load_photo(data: bytes, what: str = "cover photo"):
@@ -117,7 +161,7 @@ def identify_cover(data: bytes) -> dict:
             check=True,
             env={**ocr_environment(), "OMP_THREAD_LIMIT": "2"},
         )
-        return suggest(result.stdout.decode("utf-8"))
+        return suggest(result.stdout.decode("utf-8"), image.width, image.height)
     except (OSError, subprocess.SubprocessError, UnicodeError, KeyError, ValueError):
         raise CoverError(
             503, "Cover reading is unavailable; enter the details manually"

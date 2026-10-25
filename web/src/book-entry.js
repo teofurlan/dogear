@@ -25,6 +25,8 @@ export async function identifyBook(getToken, file, {signal} = {}) {
   const result = await send(getToken, '/identify', file, file.type, signal, 25000);
   if (!result || typeof result.title !== 'string' || result.title.length > 300 ||
       (result.author !== null && (typeof result.author !== 'string' || result.author.length > 300)) ||
-      typeof result.text !== 'string' || result.text.length > 2000) throw new BooksError(503);
+      typeof result.text !== 'string' || result.text.length > 2000 ||
+      (result.lines !== undefined && (!Array.isArray(result.lines) ||
+        result.lines.some(l => !l || typeof l.text !== 'string' || !Array.isArray(l.box) || l.box.length !== 4)))) throw new BooksError(503);
   return result;
 }
