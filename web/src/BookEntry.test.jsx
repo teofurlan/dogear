@@ -1,6 +1,6 @@
 import React from 'react';
 import {render, screen, fireEvent, waitFor} from '@testing-library/react';
-import {beforeEach, expect, test, vi} from 'vitest';
+import {beforeEach, afterEach, expect, test, vi} from 'vitest';
 import BookEntry from './BookEntry.jsx';
 import {createBook, identifyBook} from './book-entry.js';
 import {uploadCover} from './books.js';
@@ -8,11 +8,50 @@ import {uploadCover} from './books.js';
 vi.mock('./book-entry.js', () => ({createBook: vi.fn(), identifyBook: vi.fn()}));
 vi.mock('./books.js', () => ({uploadCover: vi.fn()}));
 const saved = {id: '000000000000000000000099', title: 'Synthetic book', author: null};
+
+let originalMediaDevices;
+let originalCreateObjectURL;
+let originalRevokeObjectURL;
+
 beforeEach(() => {
   createBook.mockReset().mockResolvedValue(saved);
   identifyBook.mockReset();
   uploadCover.mockReset().mockResolvedValue({...saved, has_cover_photo: true});
+
+  originalMediaDevices = navigator.mediaDevices;
+  originalCreateObjectURL = globalThis.URL.createObjectURL;
+  originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+
+  const mockTrack = {kind: 'video', stop: vi.fn(), enabled: true};
+  const mockStream = {getTracks: vi.fn(() => [mockTrack]), getVideoTracks: vi.fn(() => [mockTrack])};
+
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: {getUserMedia: vi.fn().mockResolvedValue(mockStream)},
+    configurable: true,
+    writable: true,
+  });
+
+  HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({drawImage: vi.fn()});
+  HTMLCanvasElement.prototype.toBlob = vi.fn(function(cb, type) {
+    cb(new Blob(['fake-jpg'], {type: type || 'image/jpeg'}));
+  });
+  window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(window.HTMLVideoElement.prototype, 'videoWidth', {configurable: true, get: () => 1920});
+  Object.defineProperty(window.HTMLVideoElement.prototype, 'videoHeight', {configurable: true, get: () => 1080});
+  globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+  globalThis.URL.revokeObjectURL = vi.fn();
 });
+
+afterEach(() => {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: originalMediaDevices,
+    configurable: true,
+    writable: true,
+  });
+  globalThis.URL.createObjectURL = originalCreateObjectURL;
+  globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+});
+
 const open = () => fireEvent.click(screen.getByRole('button', {name: 'Add book'}));
 
 test('manual entry requires a title and saves trimmed fields only after confirmation', async () => {
@@ -47,7 +86,7 @@ test('the accessible cover zone accepts native selection and one dropped photo w
   const input = screen.getByLabelText('Cover photo');
   expect(input).toHaveAttribute('type', 'file');
   expect(input).toHaveAttribute('accept', 'image/jpeg,image/png');
-  expect(input).toHaveAttribute('capture', 'environment');
+  expect(input).not.toHaveAttribute('capture');
   expect(input).toHaveAttribute('aria-describedby', 'cover-help');
   const nativePhoto = new File(['native'], 'native.jpg', {type: 'image/jpeg'});
   fireEvent.change(input, {target: {files: [nativePhoto]}});
@@ -57,9 +96,10 @@ test('the accessible cover zone accepts native selection and one dropped photo w
 
   const zone = screen.getByRole('group', {name: 'Cover photo options'});
   const droppedPhoto = new File(['dropped'], 'dropped.png', {type: 'image/png'});
-  fireEvent.dragOver(zone, {dataTransfer: {files: [droppedPhoto]}});
-  expect(zone).toHaveClass('is-drag-over');
-  fireEvent.drop(zone, {dataTransfer: {files: [droppedPhoto]}});
+  const dropTarget = zone.querySelector('.cover-dropzone');
+  fireEvent.dragOver(dropTarget, {dataTransfer: {files: [droppedPhoto]}});
+  expect(dropTarget).toHaveClass('is-drag-over');
+  fireEvent.drop(dropTarget, {dataTransfer: {files: [droppedPhoto]}});
   expect(await screen.findByDisplayValue('Photo title')).toBeVisible();
   expect(identifyBook).toHaveBeenLastCalledWith(expect.any(Function), droppedPhoto, expect.objectContaining({signal: expect.any(AbortSignal)}));
   expect(createBook).not.toHaveBeenCalled();
@@ -68,19 +108,56 @@ test('the accessible cover zone accepts native selection and one dropped photo w
   fireEvent.click(screen.getByRole('button', {name: 'Save book'}));
   await waitFor(() => expect(createBook).toHaveBeenCalledTimes(1));
   expect(input).toBeDisabled();
-  fireEvent.drop(zone, {dataTransfer: {files: [nativePhoto]}});
+  fireEvent.drop(dropTarget, {dataTransfer: {files: [nativePhoto]}});
   expect(identifyBook).toHaveBeenCalledTimes(2);
   finishSave(saved);
   await screen.findByRole('status');
 });
 
-test('touch presentation offers a camera action while retaining desktop drop and native capture', () => {
+test('camera is the primary action while gallery selection is secondary without capture attribute', () => {
   render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
-  const camera = screen.getByText('Take a cover photo');
-  expect(camera.closest('.cover-dropzone-copy')).toHaveClass('cover-dropzone-touch');
-  expect(screen.getByText('Drop a cover photo here').closest('.cover-dropzone-copy')).toHaveClass('cover-dropzone-desktop');
-  expect(screen.getByLabelText('Cover photo')).toHaveAttribute('capture', 'environment');
-  expect(screen.getByLabelText('Cover photo')).toHaveAttribute('accept', 'image/jpeg,image/png');
+  const cameraBtn = screen.getByRole('button', {name: 'Take cover photo'});
+  expect(cameraBtn).toBeInTheDocument();
+  expect(screen.getByText('Choose from gallery')).toBeInTheDocument();
+  const input = screen.getByLabelText('Cover photo');
+  expect(input).not.toHaveAttribute('capture');
+  expect(input).toHaveAttribute('accept', 'image/jpeg,image/png');
+});
+
+test('opening camera, capturing photo and using it passes File to identifyBook', async () => {
+  identifyBook.mockResolvedValue({title: 'Camera Book', author: 'Camera Author', text: 'Scanned text'});
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+
+  fireEvent.click(screen.getByRole('button', {name: 'Take cover photo'}));
+  expect(await screen.findByRole('dialog', {name: 'Camera'})).toBeInTheDocument();
+
+  fireEvent.click(screen.getByLabelText('Take photo'));
+  const useBtn = await screen.findByRole('button', {name: 'Use photo'});
+  fireEvent.click(useBtn);
+
+  expect(await screen.findByDisplayValue('Camera Book')).toBeVisible();
+  expect(screen.getByDisplayValue('Camera Author')).toBeVisible();
+  expect(identifyBook).toHaveBeenCalledWith(
+    expect.any(Function),
+    expect.objectContaining({name: 'cover.jpg', type: 'image/jpeg'}),
+    expect.anything()
+  );
+  expect(screen.queryByRole('dialog', {name: 'Camera'})).not.toBeInTheDocument();
+});
+
+test('camera permission denied displays fallback message and leaves gallery available', async () => {
+  const notAllowed = new Error('Permission denied');
+  notAllowed.name = 'NotAllowedError';
+  navigator.mediaDevices.getUserMedia.mockRejectedValue(notAllowed);
+
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  fireEvent.click(screen.getByRole('button', {name: 'Take cover photo'}));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Camera permission was denied. Choose a photo from the gallery instead.'
+  );
+  expect(screen.queryByRole('dialog', {name: 'Camera'})).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Cover photo')).not.toBeDisabled();
 });
 
 test('unreadable covers keep manual entry usable without exposing server details', async () => {
@@ -168,4 +245,14 @@ test('save is marked busy only while the book is being saved', async () => {
   fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'Synthetic book'}});
   fireEvent.click(save);
   expect(await screen.findByRole('button', {name: 'Saving book…'})).toHaveAttribute('aria-busy', 'true');
+});
+
+test('a photo dropped while a cover is being read is ignored', async () => {
+  identifyBook.mockReturnValue(new Promise(() => {}));
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [new File(['a'], 'a.jpg', {type: 'image/jpeg'})]}});
+  expect(await screen.findByText(/Reading cover/)).toBeInTheDocument();
+  const dropTarget = screen.getByRole('group', {name: 'Cover photo options'}).querySelector('.cover-dropzone');
+  fireEvent.drop(dropTarget, {dataTransfer: {files: [new File(['b'], 'b.png', {type: 'image/png'})]}});
+  expect(identifyBook).toHaveBeenCalledTimes(1);
 });
