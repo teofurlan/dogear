@@ -1,6 +1,6 @@
 # Dogear: working requirements
 
-Living document for the Hacktoberfest Week 3 ("Slow and Steady") entry. It is updated as decisions are made. The public write-up lives in `post-draft.md`.
+Living document for the Hacktoberfest Week 3 ("Slow and Steady") entry. It is updated as decisions are made. The public write-up is a DEV post, drafted outside this repository.
 
 Deadline: 2026-10-25 23:59 PDT.
 

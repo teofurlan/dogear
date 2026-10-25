@@ -2,7 +2,7 @@
 
 **Photograph the pages you highlighted in a paper book. Overnight, a small open-weight model on a plain CPU types out exactly the highlighted passages. In the morning you review them.**
 
-[Live app](https://dogear-web.onrender.com) · [Demo video](https://youtu.be/X18GtpoFXyM) · [Build log](docs/post-draft.md) · [API reference](docs/api.md)
+[Live app](https://dogear-web.onrender.com) · [Demo video](https://youtu.be/X18GtpoFXyM) · [API reference](docs/api.md)
 
 Built for the [DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Steady](https://dev.to/challenges/hacktoberfest-week3-2026-10-19).
 
