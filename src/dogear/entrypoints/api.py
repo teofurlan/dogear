@@ -444,30 +444,22 @@ def create_app() -> FastAPI:
             if book_id is not None:
                 if not captures.owns_book(subject, book_id):
                     raise HTTPException(404, "Book not found")
-                book = (
-                    captures.get_book(subject, book_id)
-                    if hasattr(captures, "get_book")
-                    else None
-                )
-                if book is None:
-                    book = {"id": book_id, "title": "Untitled book", "author": None}
+                book = captures.get_book(subject, book_id)
                 quotes = captures.list_quotes(subject, book_id, "kept")
                 content = export_markdown([{"book": book, "quotes": quotes}])
                 filename = f"quotes-{book_id}.md"
             else:
                 quotes = captures.list_quotes(subject, None, "kept")
                 book_ids = list(dict.fromkeys(q["book_id"] for q in quotes))
-                books_by_id = {}
-                if hasattr(captures, "list_books_for_export"):
-                    for b in captures.list_books_for_export(subject, book_ids):
-                        books_by_id[b["id"]] = b
-                book_quotes = []
-                for bid in book_ids:
-                    book = books_by_id.get(
-                        bid, {"id": bid, "title": "Untitled book", "author": None}
-                    )
-                    b_quotes = [q for q in quotes if q["book_id"] == bid]
-                    book_quotes.append({"book": book, "quotes": b_quotes})
+                books_by_id = {
+                    b["id"]: b
+                    for b in captures.list_books_for_export(subject, book_ids)
+                }
+                book_quotes = [
+                    {"book": books_by_id[bid], "quotes": [q for q in quotes if q["book_id"] == bid]}
+                    for bid in book_ids
+                    if bid in books_by_id
+                ]
                 content = export_markdown(book_quotes)
                 filename = "quotes.md"
 

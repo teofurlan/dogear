@@ -2,7 +2,7 @@ import pytest
 from bson import ObjectId
 
 from dogear.entrypoints import api
-from tests.fakes import FakeCaptures, FakePhotos
+from tests.fakes import FakeCaptures
 
 ALICE, BOB = "auth0|alice", "auth0|bob"
 BOOK_1 = str(ObjectId())
@@ -15,8 +15,8 @@ def export_client(auth):
     captures = FakeCaptures()
     client.app.dependency_overrides[api.capture_store] = lambda: captures
 
-    captures.add_book(ALICE, BOOK_1)
-    captures.add_book(ALICE, BOOK_2)
+    captures.add_book(ALICE, BOOK_1, title="Book One", author="Alice Author")
+    captures.add_book(ALICE, BOOK_2, title="Book Two")
 
     def headers(subject=ALICE, **extra):
         return {"Authorization": f"Bearer {issue({'sub': subject})}", **extra}
@@ -59,8 +59,7 @@ def test_export_single_book_with_kept_quotes(export_client):
     assert res.status_code == 200
     assert res.headers["content-type"] == "text/markdown; charset=utf-8"
     assert f'filename="quotes-{BOOK_1}.md"' in res.headers["content-disposition"]
-    assert "# Untitled book" in res.text
-    assert "> First kept quote" in res.text
+    assert "# Book One\nAlice Author\n\n> First kept quote\n" == res.text
     assert "Pending quote" not in res.text
 
 
@@ -74,6 +73,20 @@ def test_export_all_books(export_client):
     assert res.status_code == 200
     assert res.headers["content-type"] == "text/markdown; charset=utf-8"
     assert 'filename="quotes.md"' in res.headers["content-disposition"]
-    assert "> Quote from book 1" in res.text
-    assert "> Quote from book 2" in res.text
+    assert "# Book One\nAlice Author\n\n> Quote from book 1" in res.text
+    assert "# Book Two\n\n> Quote from book 2" in res.text
     assert "Bob quote" not in res.text
+
+
+def test_export_all_books_skips_quotes_with_missing_book(export_client):
+    client, headers, captures = export_client
+    # Add a kept quote with a book ID that doesn't exist in owner's books
+    missing_book_id = str(ObjectId())
+    captures.add_quote(ALICE, missing_book_id, "Quote for deleted book")
+    captures.add_quote(ALICE, BOOK_1, "Quote from book 1")
+
+    res = client.get("/quotes/export", headers=headers(ALICE))
+    assert res.status_code == 200
+    assert "# Book One" in res.text
+    assert "Quote for deleted book" not in res.text
+    assert "Untitled book" not in res.text

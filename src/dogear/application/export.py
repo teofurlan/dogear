@@ -16,7 +16,6 @@ def export_markdown(book_quotes: list[dict[str, Any]]) -> str:
     Books are sorted by title order. Quotes are rendered in their stored order.
     Only books that have quotes should be included.
     """
-    # Sort books by title order (case-insensitive or natural string ordering)
     sorted_books = sorted(
         [bq for bq in book_quotes if bq.get("quotes")],
         key=lambda bq: bq["book"]["title"].lower() if bq["book"].get("title") else "",
@@ -29,15 +28,8 @@ def export_markdown(book_quotes: list[dict[str, Any]]) -> str:
     for entry in sorted_books:
         book = entry["book"]
         quotes = entry["quotes"]
-        parts = [f"# {book['title']}"]
-        if book.get("author"):
-            parts.append(book["author"])
-        
-        quote_blocks = [format_quote_markdown(q["text"]) for q in quotes]
-        # Quotes grouped under book title/author separated by blank lines
-        body = "\n\n".join(quote_blocks)
-        parts.append("")
-        parts.append(body)
-        sections.append("\n".join(parts[:2]) + "\n\n" + body if book.get("author") else f"# {book['title']}\n\n{body}")
+        header = f"# {book['title']}\n{book['author']}" if book.get("author") else f"# {book['title']}"
+        body = "\n\n".join(format_quote_markdown(q["text"]) for q in quotes)
+        sections.append(f"{header}\n\n{body}")
 
     return "\n\n".join(sections) + "\n"
