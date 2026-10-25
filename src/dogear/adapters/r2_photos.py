@@ -54,6 +54,7 @@ class R2Photos:
         self.config = config
         self._client = client
         self._lock = Lock()
+        self._probed = False
 
     def _s3(self):
         # boto3 is heavy to import; only photo requests and the night run need it.
@@ -83,7 +84,30 @@ class R2Photos:
                 Bucket=self.config.bucket, Key=key, Body=data, ContentType="image/jpeg"
             )
         except (BotoCoreError, ClientError, OSError) as error:
-            raise _unavailable("put", error) from None
+            unavailable = _unavailable("put", error)
+            if _code(error) == "AccessDenied":
+                self._diagnose()
+            raise unavailable from None
+
+    def _diagnose(self) -> None:
+        """Once per process, ask R2 what these credentials can do, so a denied write
+        shows whether the bucket name, its scope or a read-only permission is wrong."""
+        with self._lock:
+            if self._probed:
+                return
+            self._probed = True
+        s3, bucket = self._s3(), self.config.bucket
+        answers = []
+        for name, call in (
+            ("head_bucket", lambda: s3.head_bucket(Bucket=bucket)),
+            ("list_objects", lambda: s3.list_objects_v2(Bucket=bucket, MaxKeys=1)),
+        ):
+            try:
+                call()
+                answers.append(f"{name}=ok")
+            except Exception as error:  # noqa: BLE001 - a diagnosis never raises
+                answers.append(f"{name}={_code(error) or type(error).__name__}")
+        log.warning("R2 diagnosis: %s put_object=AccessDenied", " ".join(answers))
 
     def get(self, key: str) -> bytes:
         try:
@@ -105,8 +129,11 @@ class R2Photos:
                 self._client = None
 
 
+def _code(error: Exception) -> str | None:
+    return error.response.get("Error", {}).get("Code") if isinstance(error, ClientError) else None
+
+
 def _unavailable(operation: str, error: Exception) -> PhotosUnavailable:
     # Only the error code or class: messages can carry endpoints and request details.
-    code = error.response.get("Error", {}).get("Code") if isinstance(error, ClientError) else None
-    log.warning("R2 %s failed: %s", operation, code or type(error).__name__)
+    log.warning("R2 %s failed: %s", operation, _code(error) or type(error).__name__)
     return PhotosUnavailable()
