@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useAuth0} from '@auth0/auth0-react';
+import BookActions from './BookActions.jsx';
 import BookCover from './BookCover.jsx';
 import PageCapture from './PageCapture.jsx';
 import QuoteReview from './QuoteReview.jsx';
@@ -7,7 +8,7 @@ import {findCover} from './covers.js';
 import {exportBookQuotes} from './export.js';
 import './book-view.css';
 
-export default function BookView({book, coverUrl, getToken, onBack}) {
+export default function BookView({book, coverUrl, getToken, onBack, onChanged = () => {}, onDeleted = () => {}}) {
   const {loginWithRedirect} = useAuth0();
   const heading = useRef(null);
   const [localCover, setLocalCover] = useState(null);
@@ -97,6 +98,7 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
           {exporting ? 'Exporting…' : 'Export quotes'}
         </button>
         {exportError ? <p className="quote-error" role="alert">{exportError}</p> : null}
+        <BookActions book={book} getToken={getToken} uploading={uploading} onSessionExpired={onSessionExpired} onChanged={onChanged} onDeleted={onDeleted} />
       </div>
     </header>
     <PageCapture getToken={getToken} bookId={book.id} onSessionExpired={onSessionExpired} onUploadingChange={setUploading} />

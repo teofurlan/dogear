@@ -52,6 +52,14 @@ class CaptureStore(Protocol):
         """A kept quote without crop or page."""
         ...
 
+    def delete_book(self, owner: str, book_id: str) -> list[str] | None:
+        """Remove the book, then its pages and quotes.
+
+        Answers the photo keys its unprocessed pages still had, or None for an unknown
+        or foreign book.
+        """
+        ...
+
 
 class NightStore(Protocol):
     def claim_page(
@@ -67,7 +75,10 @@ class NightStore(Protocol):
     def replace_page_quotes(
         self, page: dict[str, Any], quotes: list[dict[str, Any]], now: datetime
     ) -> None:
-        """Replace the page's pending quotes ({"text", "ocr_text", "flags", "crop"})."""
+        """Replace the page's pending quotes ({"text", "ocr_text", "flags", "crop"}).
+
+        If the book was deleted meanwhile, the new quotes and the page are dropped.
+        """
         ...
 
     def finish_page(self, page_id: str, now: datetime) -> None: ...

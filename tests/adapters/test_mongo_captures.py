@@ -98,14 +98,15 @@ def test_night_reclaims_stale_processing_and_retries_failures_up_to_three(store,
 
 
 def test_finishing_a_page_and_replacing_its_pending_quotes(store, db):
-    store.create_page("alice", "b1", "p1", "k/p1")
+    book = book_for(db, "alice")
+    store.create_page("alice", book, "p1", "k/p1")
     page = store.claim_page(NOW, set())
     candidate = {"text": "Quote", "ocr_text": "Quate", "flags": ["x"], "crop": b"jpeg"}
     store.replace_page_quotes(page, [candidate], NOW)
-    kept = store.list_quotes("alice", "b1", "pending")[0]
+    kept = store.list_quotes("alice", book, "pending")[0]
     store.update_quote("alice", kept["id"], None, "kept")
     store.replace_page_quotes(page, [candidate, candidate], NOW)  # a retry
-    quotes = store.list_quotes("alice", "b1", None)
+    quotes = store.list_quotes("alice", book, None)
     assert [q["status"] for q in quotes] == ["kept", "pending", "pending"]
     assert all(q["page_id"] == "p1" and q["has_crop"] for q in quotes)
     assert store.quote_crop("alice", quotes[1]["id"]) == b"jpeg"
@@ -113,6 +114,53 @@ def test_finishing_a_page_and_replacing_its_pending_quotes(store, db):
     store.finish_page("p1", NOW)
     done = db["pages"].find_one({"_id": "p1"})
     assert done["status"] == "processed" and done["processed_at"] == NOW
+
+
+CANDIDATE = {"text": "Quote", "ocr_text": "Quote", "flags": [], "crop": None}
+
+
+def test_deleting_a_book_removes_its_pages_and_quotes_for_its_owner_only(store, db):
+    book, other = book_for(db, "alice"), book_for(db, "alice")
+    store.create_page("alice", book, "p1", "k/p1")
+    store.create_page("alice", book, "p2", "k/p2")
+    store.create_page("alice", other, "p3", "k/p3")
+    store.replace_page_quotes(store.claim_page(NOW, set()), [CANDIDATE], NOW)
+    store.finish_page("p1", NOW)
+    store.add_quote("alice", book, "Kept")
+    store.add_quote("alice", other, "Elsewhere")
+
+    assert store.delete_book("bob", book) is None
+    assert store.delete_book("alice", "not-an-id") is None
+    assert store.delete_book("alice", str(ObjectId())) is None
+    assert store.owns_book("alice", book)
+
+    assert store.delete_book("alice", book) == ["k/p2"]  # p1's photo went at processing
+    assert not store.owns_book("alice", book)
+    assert store.list_pages("alice", book) == []
+    assert store.list_quotes("alice", book, None) == []
+    assert [p["id"] for p in store.list_pages("alice", other)] == ["p3"]
+    assert [q["text"] for q in store.list_quotes("alice", None, None)] == ["Elsewhere"]
+    assert store.delete_book("alice", book) is None
+
+
+def test_quotes_read_after_their_book_was_deleted_are_dropped(store, db):
+    book = book_for(db, "alice")
+    store.create_page("alice", book, "p1", "k/p1")
+    page = store.claim_page(NOW, set())
+    store.delete_book("alice", book)  # while the night run reads the photo
+    store.replace_page_quotes(page, [CANDIDATE], NOW)
+    store.finish_page("p1", NOW)
+    assert db["quotes"].find_one({"page_id": "p1"}) is None
+    assert db["pages"].find_one({"_id": "p1"}) is None
+
+
+def test_a_page_uploaded_as_its_book_was_deleted_is_dropped_by_the_night(store, db):
+    book = book_for(db, "alice")
+    store.delete_book("alice", book)
+    store.create_page("alice", book, "p1", "k/p1")  # the upload passed its check earlier
+    store.replace_page_quotes(store.claim_page(NOW, set()), [CANDIDATE], NOW)
+    assert db["quotes"].find_one({"page_id": "p1"}) is None
+    assert db["pages"].find_one({"_id": "p1"}) is None
 
 
 def test_driver_failures_become_capture_unavailable(db):

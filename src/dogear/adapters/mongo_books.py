@@ -155,6 +155,22 @@ class MongoBooks:
         except (PyMongoError, OSError, ValueError):
             raise BooksUnavailable() from None
 
+    def update(
+        self, subject: str, book_id: str, title: str, author: str | None
+    ) -> dict[str, Any] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        try:
+            doc = self._collection().find_one_and_update(
+                {"_id": oid, "owner_sub": subject},
+                {"$set": {"title": title, "author": author}},
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            return _public_book(doc) if doc else None
+        except (PyMongoError, OSError, ValueError):
+            raise BooksUnavailable() from None
+
     def owns_book(self, subject: str, book_id: str) -> bool:
         oid = _object_id(book_id)
         if oid is None:

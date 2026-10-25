@@ -12,7 +12,12 @@ vi.mock('@auth0/auth0-react', () => ({useAuth0: () => auth}));
 vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), getBook: vi.fn(), BooksError: class extends Error {}}));
 vi.mock('./covers.js', () => ({loadCovers: vi.fn(async (books, receive) => books.forEach(item => receive(item.id, null)))}));
 vi.mock('./quotes.js', () => ({listQuotes: vi.fn()}));
-vi.mock('./BookView.jsx', () => ({default: ({book, onBack}) => <div><h1>View of {book.title}</h1><button onClick={onBack}>Back to library</button></div>}));
+vi.mock('./BookView.jsx', () => ({default: ({book, onBack, onChanged, onDeleted}) => <div>
+  <h1>View of {book.title}</h1>
+  <button onClick={onBack}>Back to library</button>
+  <button onClick={() => onChanged({...book, title: 'A quieter afternoon', author: null})}>rename</button>
+  <button onClick={() => onDeleted(book.id)}>delete</button>
+</div>}));
 
 const book = {id: '000000000000000000000001', title: 'A quiet afternoon', author: 'Ada Reed'};
 beforeEach(() => {
@@ -166,3 +171,29 @@ test('empty search results show no books found feedback', async () => {
   expect(await screen.findByRole('heading', {name: 'No books found'})).toBeInTheDocument();
   expect(screen.getByText('No books match “Nonexistent”.')).toBeInTheDocument();
 });
+
+test('an edited book shows its new details in the view and the library', async () => {
+  render(<App />);
+  await userEvent.click(await screen.findByRole('link', {name: /A quiet afternoon/}));
+  await userEvent.click(await screen.findByRole('button', {name: 'rename'}));
+  expect(await screen.findByRole('heading', {name: 'View of A quieter afternoon'})).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', {name: 'Back to library'}));
+  expect(await screen.findByRole('link', {name: 'A quieter afternoon'})).toBeInTheDocument();
+  expect(screen.queryByRole('link', {name: /A quiet afternoon by/})).not.toBeInTheDocument();
+}, 15000);
+
+test('a deleted book returns to the library without that book', async () => {
+  const other = {id: '000000000000000000000002', title: 'A loud morning', author: null};
+  listBooks.mockResolvedValue([book, other]);
+  listQuotes.mockResolvedValue([{id: 'q1', book_id: book.id, status: 'pending'}]);
+  render(<App />);
+  await userEvent.click(await screen.findByRole('link', {name: 'A quiet afternoon by Ada Reed'}));
+  listQuotes.mockResolvedValue([]);
+  await userEvent.click(await screen.findByRole('button', {name: 'delete'}));
+  expect(await screen.findByRole('heading', {name: 'Your library'})).toBeInTheDocument();
+  expect(window.location.hash).toBe('');
+  expect(screen.queryByRole('link', {name: /A quiet afternoon/})).not.toBeInTheDocument();
+  expect(screen.getByRole('link', {name: 'A loud morning'})).toBeInTheDocument();
+  expect(screen.queryByText(/waiting for review/i)).not.toBeInTheDocument();
+  expect(getBook).not.toHaveBeenCalled();
+}, 15000);

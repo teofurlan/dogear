@@ -1,5 +1,5 @@
 import {afterEach, expect, test, vi} from 'vitest';
-import {fetchCover, getBook, listBooks, uploadCover} from './books.js';
+import {deleteBook, fetchCover, getBook, listBooks, updateBook, uploadCover} from './books.js';
 afterEach(() => vi.unstubAllGlobals());
 const book = {id:'000000000000000000000001',title:'Example',author:null};
 
@@ -78,4 +78,27 @@ test('uploadCover puts binary image to /api/books/:id/cover', async () => {
   expect(options.method).toBe('PUT');
   expect(options.headers).toEqual({Authorization: 'Bearer auth-token', 'Content-Type': 'image/png'});
   expect(options.body).toBe(file);
+});
+
+test('updateBook patches title and author as JSON, omitting a missing author', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok:true,status:200,json:async()=>book});
+  vi.stubGlobal('fetch', fetch);
+  expect(await updateBook(async () => 'token', book.id, {title:'Example', author:'Ada'})).toEqual(book);
+  let [url, options] = fetch.mock.calls[0];
+  expect(url).toBe('/api/books/'+book.id);
+  expect(options).toMatchObject({method:'PATCH', credentials:'omit', body:'{"title":"Example","author":"Ada"}'});
+  expect(options.headers).toEqual({Authorization:'Bearer token', 'Content-Type':'application/json'});
+  await updateBook(async () => 'token', book.id, {title:'Example', author:null});
+  [, options] = fetch.mock.calls[1];
+  expect(options.body).toBe('{"title":"Example"}');
+});
+
+test('deleteBook sends DELETE and rejects with the status on failure', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok:true,status:204});
+  vi.stubGlobal('fetch', fetch);
+  expect(await deleteBook(async () => 'token', book.id)).toBeNull();
+  expect(fetch.mock.calls[0][0]).toBe('/api/books/'+book.id);
+  expect(fetch.mock.calls[0][1]).toMatchObject({method:'DELETE', credentials:'omit'});
+  fetch.mockResolvedValue({ok:false,status:404});
+  await expect(deleteBook(async () => 'token', book.id)).rejects.toMatchObject({status:404});
 });
