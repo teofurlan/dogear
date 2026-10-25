@@ -1,6 +1,8 @@
 import {afterEach, expect, test, vi} from 'vitest';
+vi.mock('./books.js', async importOriginal => ({...await importOriginal(), setCatalogCover: vi.fn()}));
+import {setCatalogCover} from './books.js';
 import {findCover, coverUrl, loadCovers} from './covers.js';
-afterEach(() => {vi.unstubAllGlobals(); vi.useRealTimers();});
+afterEach(() => {vi.unstubAllGlobals(); vi.useRealTimers(); vi.clearAllMocks();});
 const book = {id:'example',title:'A quiet afternoon',author:'Ada Reed'};
 
 test('a representative cover requires matching title and author and a safe numeric cover ID', async () => {
@@ -56,6 +58,86 @@ test('stored cover photo is used as fallback when Open Library has no match', as
   expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
 });
 
+test('stored catalog cover is returned without searching', async () => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  expect(await findCover({...book, catalog_cover_id: 321}, new AbortController().signal)).toBe(coverUrl(321));
+  expect(fetch).not.toHaveBeenCalled();
+  expect(setCatalogCover).not.toHaveBeenCalled();
+});
+
+test('recently checked no-match skips search and uses photo fallback', async () => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  const url = 'blob:recent-photo';
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue(url);
+  vi.spyOn(await import('./books.js'), 'fetchCover').mockResolvedValue(new Blob(['photo']));
+  const recent = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString();
+  expect(await findCover({...book, catalog_cover_id: null, catalog_checked_at: recent, has_cover_photo: true}, new AbortController().signal, {getToken: vi.fn()})).toBe(url);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('stale no-match is searched again', async () => {
+  const fetch = vi.fn().mockResolvedValue({ok: true, json: async () => ({docs: []})}); vi.stubGlobal('fetch', fetch);
+  const stale = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  await findCover({...book, catalog_cover_id: null, catalog_checked_at: stale}, new AbortController().signal, {getToken: 'token'});
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, null, {title: book.title, author: book.author});
+});
+
+test.each([
+  ['network error', () => Promise.reject(new Error('offline'))],
+  ['server error', () => Promise.resolve({ok: false, status: 500})],
+  ['malformed JSON', () => Promise.resolve({ok: true, json: async () => {throw new Error('invalid json');}})],
+])('%s is not saved as a no-match', async (_label, response) => {
+  vi.stubGlobal('fetch', vi.fn(response));
+  await findCover(book, new AbortController().signal);
+  expect(setCatalogCover).not.toHaveBeenCalled();
+});
+
+test('matched cover is saved and failed save does not hide it', async () => {
+  setCatalogCover.mockRejectedValue(new Error('save failed'));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, json: async () => ({docs: [{title: book.title, author_name: [book.author], cover_i: 456}]})}));
+  expect(await findCover(book, new AbortController().signal, {getToken: 'token'})).toBe(coverUrl(456));
+  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, 456, {title: book.title, author: book.author});
+});
+
+test('searched no-match is saved as null and failed save preserves fallback', async () => {
+  setCatalogCover.mockRejectedValue(new Error('save failed'));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, json: async () => ({docs: []})}));
+  expect(await findCover(book, new AbortController().signal, {getToken: 'token'})).toBeNull();
+  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, null, {title: book.title, author: book.author});
+});
+
+test('ambiguous authorless result with multiple matches is not saved and returns fallback', async () => {
+  const fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      docs: [
+        {title: 'Ambiguous Book', cover_i: 111},
+        {title: 'Ambiguous Book', cover_i: 222},
+      ],
+    }),
+  });
+  vi.stubGlobal('fetch', fetch);
+  const authorlessBook = {id: 'amb-1', title: 'Ambiguous Book', author: null};
+  const result = await findCover(authorlessBook, new AbortController().signal, {getToken: 'token'});
+  expect(result).toBeNull();
+  expect(setCatalogCover).not.toHaveBeenCalled();
+});
+
+test('single authorless match is saved with null author', async () => {
+  const fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      docs: [{title: 'Solo Book', cover_i: 333}],
+    }),
+  });
+  vi.stubGlobal('fetch', fetch);
+  const authorlessBook = {id: 'solo-1', title: 'Solo Book', author: null};
+  const result = await findCover(authorlessBook, new AbortController().signal, {getToken: 'token'});
+  expect(result).toBe(coverUrl(333));
+  expect(setCatalogCover).toHaveBeenCalledWith('token', authorlessBook.id, 333, {title: 'Solo Book', author: null});
+});
+
 test('Open Library match takes priority over stored cover photo', async () => {
   const fetch = vi.fn().mockImplementation(async (url) => {
     if (typeof url === 'string' && url.includes('openlibrary.org')) {
@@ -70,4 +152,13 @@ test('Open Library match takes priority over stored cover photo', async () => {
   const result = await findCover(bookWithCover, new AbortController().signal, {getToken});
 
   expect(result).toBe(coverUrl(999));
+});
+
+test('loadCovers delivers stored covers without sending Open Library requests', async () => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  const receive = vi.fn();
+  const storedBook = {...book, catalog_cover_id: 888};
+  await loadCovers([storedBook], receive, new AbortController().signal);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(receive).toHaveBeenCalledWith(storedBook.id, coverUrl(888));
 });

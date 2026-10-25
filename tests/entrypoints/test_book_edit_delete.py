@@ -59,6 +59,8 @@ def test_the_owner_edits_title_and_author(library):
         "title": "The Title",
         "author": "Ada Reed",
         "has_cover_photo": False,
+        "catalog_cover_id": None,
+        "catalog_checked_at": None,
     }
     assert books.get_for_owner(ALICE, book["id"])["title"] == "The Title"
 
@@ -68,6 +70,57 @@ def test_leaving_the_author_out_clears_it(library):
     book = books.create(ALICE, "Title", "Wrong Author")
     response = client.patch(f"/books/{book['id']}", json={"title": "Title"}, headers=headers())
     assert response.status_code == 200 and response.json()["author"] is None
+
+
+def test_editing_title_or_author_clears_catalog_cover(library):
+    client, headers, books, _, _ = library
+    book = books.create(ALICE, "Original Title", "Original Author")
+    books.set_catalog_cover(
+        ALICE, book["id"], 12345, "Original Title", "Original Author"
+    )
+    matched = books.get_for_owner(ALICE, book["id"])
+    assert matched["catalog_cover_id"] == 12345
+    assert matched["catalog_checked_at"] is not None
+
+    # Editing title clears both catalog fields
+    res1 = client.patch(
+        f"/books/{book['id']}",
+        json={"title": "New Title", "author": "Original Author"},
+        headers=headers(),
+    )
+    assert res1.status_code == 200
+    assert res1.json()["catalog_cover_id"] is None
+    assert res1.json()["catalog_checked_at"] is None
+
+    # Reset catalog cover
+    books.set_catalog_cover(
+        ALICE, book["id"], 67890, "New Title", "Original Author"
+    )
+
+    # Editing author clears both catalog fields
+    res2 = client.patch(
+        f"/books/{book['id']}",
+        json={"title": "New Title", "author": "New Author"},
+        headers=headers(),
+    )
+    assert res2.status_code == 200
+    assert res2.json()["catalog_cover_id"] is None
+    assert res2.json()["catalog_checked_at"] is None
+
+    # Reset catalog cover
+    books.set_catalog_cover(
+        ALICE, book["id"], 99999, "New Title", "New Author"
+    )
+
+    # Editing with same title and author preserves catalog fields
+    res3 = client.patch(
+        f"/books/{book['id']}",
+        json={"title": "  New Title  ", "author": "New Author"},
+        headers=headers(),
+    )
+    assert res3.status_code == 200
+    assert res3.json()["catalog_cover_id"] == 99999
+    assert res3.json()["catalog_checked_at"] is not None
 
 
 @pytest.mark.parametrize(

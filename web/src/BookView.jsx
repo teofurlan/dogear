@@ -49,6 +49,7 @@ export default function BookView({book, coverUrl, getToken, onBack, onChanged = 
     if (coverUrl !== undefined || !book?.id || !getToken) return undefined;
     const controller = new AbortController();
     let objectUrl = null;
+    setLocalCover(null);
     findCover(book, controller.signal, {getToken}).then(url => {
       if (controller.signal.aborted) return;
       if (url?.startsWith('blob:')) objectUrl = url;

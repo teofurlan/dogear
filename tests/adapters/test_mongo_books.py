@@ -2,7 +2,12 @@ import pytest
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 
-from dogear.adapters.mongo_books import BooksUnavailable, MongoBooks, MongoConfig
+from dogear.adapters.mongo_books import (
+    BookChanged,
+    BooksUnavailable,
+    MongoBooks,
+    MongoConfig,
+)
 from tests.adapters.fake_mongo import FakeDatabase
 
 CONFIG = MongoConfig("mongodb+srv://db.example.test/", "user", "secret", "dogear")
@@ -54,6 +59,122 @@ def test_set_cover_photo(books):
     # Non-owner cannot update
     assert books.set_cover_photo("bob", created["id"], True) is None
     assert books.set_cover_photo("alice", "invalid-id", True) is None
+
+
+def test_set_catalog_cover(books):
+    created = books.create("alice", "Quiet Book", "Ada Reed")
+    assert created["catalog_cover_id"] is None
+    assert created["catalog_checked_at"] is None
+
+    # Set positive cover ID
+    updated = books.set_catalog_cover(
+        "alice", created["id"], 54321, "Quiet Book", "Ada Reed"
+    )
+    assert updated is not None
+    assert updated["catalog_cover_id"] == 54321
+    assert updated["catalog_checked_at"] is not None
+
+    # Set null cover ID (no match)
+    updated_null = books.set_catalog_cover(
+        "alice", created["id"], None, "Quiet Book", "Ada Reed"
+    )
+    assert updated_null is not None
+    assert updated_null["catalog_cover_id"] is None
+    assert updated_null["catalog_checked_at"] is not None
+
+    # Non-owner or invalid id returns None
+    assert (
+        books.set_catalog_cover(
+            "bob", created["id"], 123, "Quiet Book", "Ada Reed"
+        )
+        is None
+    )
+    assert (
+        books.set_catalog_cover(
+            "alice", "invalid-id", 123, "Quiet Book", "Ada Reed"
+        )
+        is None
+    )
+    assert (
+        books.set_catalog_cover(
+            "alice", str(ObjectId()), 123, "Quiet Book", "Ada Reed"
+        )
+        is None
+    )
+
+
+def test_set_catalog_cover_stores_only_on_exact_title_author_match(books):
+    created = books.create("alice", "Dune", "Frank Herbert")
+
+    # Mismatched title raises BookChanged and stores nothing
+    with pytest.raises(BookChanged):
+        books.set_catalog_cover(
+            "alice", created["id"], 12345, "Different Title", "Frank Herbert"
+        )
+    stored = books.get_for_owner("alice", created["id"])
+    assert stored["catalog_cover_id"] is None
+    assert stored["catalog_checked_at"] is None
+
+    # Mismatched author raises BookChanged and stores nothing
+    with pytest.raises(BookChanged):
+        books.set_catalog_cover(
+            "alice", created["id"], 12345, "Dune", "Brian Herbert"
+        )
+    stored = books.get_for_owner("alice", created["id"])
+    assert stored["catalog_cover_id"] is None
+    assert stored["catalog_checked_at"] is None
+
+    # None author when author exists raises BookChanged
+    with pytest.raises(BookChanged):
+        books.set_catalog_cover(
+            "alice", created["id"], 12345, "Dune", None
+        )
+    assert books.get_for_owner("alice", created["id"])["catalog_cover_id"] is None
+
+    # Book with author None matches exact None
+    no_author = books.create("alice", "Silent Spring", None)
+    updated = books.set_catalog_cover(
+        "alice", no_author["id"], 999, "Silent Spring", None
+    )
+    assert updated["catalog_cover_id"] == 999
+    assert updated["catalog_checked_at"] is not None
+
+    # Book with author None raises BookChanged if author provided
+    with pytest.raises(BookChanged):
+        books.set_catalog_cover(
+            "alice", no_author["id"], 888, "Silent Spring", "Rachel Carson"
+        )
+    assert books.get_for_owner("alice", no_author["id"])["catalog_cover_id"] == 999
+
+
+def test_update_clears_catalog_cover_only_when_title_or_author_changes(books):
+    created = books.create("alice", "Title 1", "Author 1")
+    books.set_catalog_cover("alice", created["id"], 100, "Title 1", "Author 1")
+
+    # Same title and author does not clear
+    same = books.update("alice", created["id"], "Title 1", "Author 1")
+    assert same["catalog_cover_id"] == 100
+    assert same["catalog_checked_at"] is not None
+
+    # Change title clears
+    diff_title = books.update("alice", created["id"], "Title 2", "Author 1")
+    assert diff_title["catalog_cover_id"] is None
+    assert diff_title["catalog_checked_at"] is None
+
+    # Re-set catalog cover
+    books.set_catalog_cover("alice", created["id"], 200, "Title 2", "Author 1")
+
+    # Change author clears
+    diff_author = books.update("alice", created["id"], "Title 2", "Author 2")
+    assert diff_author["catalog_cover_id"] is None
+    assert diff_author["catalog_checked_at"] is None
+
+    # Book with None author unchanged preserves catalog cover
+    no_author = books.create("alice", "Solo", None)
+    books.set_catalog_cover("alice", no_author["id"], 300, "Solo", None)
+    same_no_author = books.update("alice", no_author["id"], "Solo", None)
+    assert same_no_author["catalog_cover_id"] == 300
+    assert same_no_author["catalog_checked_at"] is not None
 
 
 def test_owns_book(books):

@@ -4,6 +4,7 @@ import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 from urllib.parse import urlsplit
@@ -15,6 +16,10 @@ from pymongo.errors import PyMongoError
 
 class BooksUnavailable(Exception):
     """Storage cannot safely complete the requested operation."""
+
+
+class BookChanged(Exception):
+    """The book exists for the owner but title or author no longer match."""
 
 
 @dataclass(frozen=True)
@@ -49,12 +54,22 @@ def _object_id(value: str) -> ObjectId | None:
     return ObjectId(value) if ObjectId.is_valid(value) else None
 
 
+def _iso(moment: datetime | str | None) -> str | None:
+    if moment is None:
+        return None
+    if isinstance(moment, str):
+        return moment
+    return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).isoformat()
+
+
 def _public_book(document: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(document["_id"]),
         "title": document["title"],
         "author": document["author"],
         "has_cover_photo": bool(document.get("has_cover_photo", False)),
+        "catalog_cover_id": document.get("catalog_cover_id"),
+        "catalog_checked_at": _iso(document.get("catalog_checked_at")),
     }
 
 
@@ -122,6 +137,8 @@ class MongoBooks:
             "title": title,
             "author": author,
             "has_cover_photo": has_cover_photo,
+            "catalog_cover_id": None,
+            "catalog_checked_at": None,
         }
         try:
             result = self._collection().insert_one(document)
@@ -155,6 +172,39 @@ class MongoBooks:
         except (PyMongoError, OSError, ValueError):
             raise BooksUnavailable() from None
 
+    def set_catalog_cover(
+        self,
+        subject: str,
+        book_id: str,
+        cover_id: int | None,
+        title: str,
+        author: str | None,
+    ) -> dict[str, Any] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        now = datetime.now(timezone.utc)
+        try:
+            doc = self._collection().find_one_and_update(
+                {"_id": oid, "owner_sub": subject, "title": title, "author": author},
+                {
+                    "$set": {
+                        "catalog_cover_id": cover_id,
+                        "catalog_checked_at": now,
+                    }
+                },
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            if doc:
+                return _public_book(doc)
+            if self._collection().find_one(
+                {"_id": oid, "owner_sub": subject}, {"_id": 1}
+            ):
+                raise BookChanged()
+            return None
+        except (PyMongoError, OSError, ValueError):
+            raise BooksUnavailable() from None
+
     def update(
         self, subject: str, book_id: str, title: str, author: str | None
     ) -> dict[str, Any] | None:
@@ -163,8 +213,22 @@ class MongoBooks:
             return None
         try:
             doc = self._collection().find_one_and_update(
-                {"_id": oid, "owner_sub": subject},
+                {"_id": oid, "owner_sub": subject, "title": title, "author": author},
                 {"$set": {"title": title, "author": author}},
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            if doc:
+                return _public_book(doc)
+            doc = self._collection().find_one_and_update(
+                {"_id": oid, "owner_sub": subject},
+                {
+                    "$set": {
+                        "title": title,
+                        "author": author,
+                        "catalog_cover_id": None,
+                        "catalog_checked_at": None,
+                    }
+                },
                 return_document=pymongo.ReturnDocument.AFTER,
             )
             return _public_book(doc) if doc else None
