@@ -200,3 +200,116 @@ def test_compensation_deletes_photo_if_db_update_fails(cover_fixture, monkeypatc
     # The photo key should have been deleted
     key = cover_key(ALICE, book_id)
     assert key not in photos.objects
+
+
+def test_put_catalog_cover_matched_stores_id_and_checked_at(cover_fixture):
+    client, headers, books, _, alice_book, _ = cover_fixture
+    book_id = alice_book["id"]
+
+    res = client.put(
+        f"/books/{book_id}/catalog-cover",
+        json={"cover_id": 12345},
+        headers=headers(ALICE),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == book_id
+    assert data["catalog_cover_id"] == 12345
+    assert data["catalog_checked_at"] is not None
+
+    stored = books.get_for_owner(ALICE, book_id)
+    assert stored["catalog_cover_id"] == 12345
+    assert stored["catalog_checked_at"] == data["catalog_checked_at"]
+
+
+def test_put_catalog_cover_null_stores_no_match(cover_fixture):
+    client, headers, books, _, alice_book, _ = cover_fixture
+    book_id = alice_book["id"]
+
+    res = client.put(
+        f"/books/{book_id}/catalog-cover",
+        json={"cover_id": None},
+        headers=headers(ALICE),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == book_id
+    assert data["catalog_cover_id"] is None
+    assert data["catalog_checked_at"] is not None
+
+    stored = books.get_for_owner(ALICE, book_id)
+    assert stored["catalog_cover_id"] is None
+    assert stored["catalog_checked_at"] == data["catalog_checked_at"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"cover_id": 0},
+        {"cover_id": -1},
+        {"cover_id": -999},
+        {"cover_id": "12345"},
+        {"cover_id": 12.34},
+        {},
+        {"cover_id": 123, "extra": "field"},
+    ],
+)
+def test_put_catalog_cover_rejects_invalid_payload(cover_fixture, payload):
+    client, headers, books, _, alice_book, _ = cover_fixture
+    res = client.put(
+        f"/books/{alice_book['id']}/catalog-cover",
+        json=payload,
+        headers=headers(ALICE),
+    )
+    assert res.status_code == 422
+    assert books.get_for_owner(ALICE, alice_book["id"])["catalog_cover_id"] is None
+
+
+def test_put_catalog_cover_owner_scoping_and_not_found(cover_fixture):
+    client, headers, _, _, alice_book, bob_book = cover_fixture
+
+    # Unauthenticated
+    assert client.put(f"/books/{alice_book['id']}/catalog-cover", json={"cover_id": 1}).status_code == 401
+
+    # Bob cannot update Alice's book (404)
+    res = client.put(
+        f"/books/{alice_book['id']}/catalog-cover",
+        json={"cover_id": 123},
+        headers=headers(BOB),
+    )
+    assert res.status_code == 404
+
+    # Unknown book (404)
+    fake_id = str(ObjectId())
+    res = client.put(
+        f"/books/{fake_id}/catalog-cover",
+        json={"cover_id": 123},
+        headers=headers(ALICE),
+    )
+    assert res.status_code == 404
+
+    # Malformed book id (404)
+    res = client.put(
+        "/books/not-an-id/catalog-cover",
+        json={"cover_id": 123},
+        headers=headers(ALICE),
+    )
+    assert res.status_code == 404
+
+
+def test_put_catalog_cover_db_unavailable_returns_503(cover_fixture, monkeypatch):
+    client, headers, books, _, alice_book, _ = cover_fixture
+    from dogear.adapters.mongo_books import BooksUnavailable
+
+    def failing_set(*args, **kwargs):
+        raise BooksUnavailable()
+
+    monkeypatch.setattr(books, "set_catalog_cover", failing_set)
+    res = client.put(
+        f"/books/{alice_book['id']}/catalog-cover",
+        json={"cover_id": 123},
+        headers=headers(ALICE),
+    )
+    assert res.status_code == 503
+    assert res.json() == {"detail": "Book storage unavailable"}
+

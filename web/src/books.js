@@ -49,3 +49,11 @@ export const uploadCover = (getToken, bookId, file, {signal} = {}) =>
     signal,
     timeout: 25000,
   });
+
+export const setCatalogCover = (getToken, bookId, coverId, {signal} = {}) =>
+  api(getToken, `/books/${bookId}/catalog-cover`, {
+    method: 'PUT',
+    body: JSON.stringify({cover_id: coverId}),
+    contentType: 'application/json',
+    signal,
+  });

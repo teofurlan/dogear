@@ -121,6 +121,8 @@ def test_each_verified_reader_can_create_and_list_only_their_books(mongo, auth):
         "title": "A quiet morning",
         "author": None,
         "has_cover_photo": False,
+        "catalog_cover_id": None,
+        "catalog_checked_at": None,
     }
     assert ObjectId.is_valid(first.json()["id"])
     assert client.get("/books", headers=bob).json() == []
@@ -285,6 +287,8 @@ def test_reader_can_get_book_by_id_and_sees_full_payload(mongo, auth):
         "title": "Single book",
         "author": "Ada",
         "has_cover_photo": False,
+        "catalog_cover_id": None,
+        "catalog_checked_at": None,
     }
 
 

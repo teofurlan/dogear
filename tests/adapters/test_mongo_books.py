@@ -56,6 +56,52 @@ def test_set_cover_photo(books):
     assert books.set_cover_photo("alice", "invalid-id", True) is None
 
 
+def test_set_catalog_cover(books):
+    created = books.create("alice", "Quiet Book", "Ada Reed")
+    assert created["catalog_cover_id"] is None
+    assert created["catalog_checked_at"] is None
+
+    # Set positive cover ID
+    updated = books.set_catalog_cover("alice", created["id"], 54321)
+    assert updated is not None
+    assert updated["catalog_cover_id"] == 54321
+    assert updated["catalog_checked_at"] is not None
+
+    # Set null cover ID (no match)
+    updated_null = books.set_catalog_cover("alice", created["id"], None)
+    assert updated_null is not None
+    assert updated_null["catalog_cover_id"] is None
+    assert updated_null["catalog_checked_at"] is not None
+
+    # Non-owner or invalid id returns None
+    assert books.set_catalog_cover("bob", created["id"], 123) is None
+    assert books.set_catalog_cover("alice", "invalid-id", 123) is None
+    assert books.set_catalog_cover("alice", str(ObjectId()), 123) is None
+
+
+def test_update_clears_catalog_cover_only_when_title_or_author_changes(books):
+    created = books.create("alice", "Title 1", "Author 1")
+    books.set_catalog_cover("alice", created["id"], 100)
+
+    # Same title and author does not clear
+    same = books.update("alice", created["id"], "Title 1", "Author 1")
+    assert same["catalog_cover_id"] == 100
+    assert same["catalog_checked_at"] is not None
+
+    # Change title clears
+    diff_title = books.update("alice", created["id"], "Title 2", "Author 1")
+    assert diff_title["catalog_cover_id"] is None
+    assert diff_title["catalog_checked_at"] is None
+
+    # Re-set catalog cover
+    books.set_catalog_cover("alice", created["id"], 200)
+
+    # Change author clears
+    diff_author = books.update("alice", created["id"], "Title 2", "Author 2")
+    assert diff_author["catalog_cover_id"] is None
+    assert diff_author["catalog_checked_at"] is None
+
+
 def test_owns_book(books):
     created = books.create("alice", "Owned Book", None)
     assert books.owns_book("alice", created["id"]) is True

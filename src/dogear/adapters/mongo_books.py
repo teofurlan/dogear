@@ -4,6 +4,7 @@ import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 from urllib.parse import urlsplit
@@ -49,12 +50,26 @@ def _object_id(value: str) -> ObjectId | None:
     return ObjectId(value) if ObjectId.is_valid(value) else None
 
 
+def _iso(moment: datetime | str | None) -> str | None:
+    if moment is None:
+        return None
+    if isinstance(moment, str):
+        return moment
+    return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).isoformat()
+
+
 def _public_book(document: dict[str, Any]) -> dict[str, Any]:
+    cover_id = document.get("catalog_cover_id")
+    if cover_id is None and "cover_id" in document:
+        cover_id = document.get("cover_id")
+    checked_at = document.get("catalog_checked_at") or document.get("checked_at")
     return {
         "id": str(document["_id"]),
         "title": document["title"],
         "author": document["author"],
         "has_cover_photo": bool(document.get("has_cover_photo", False)),
+        "catalog_cover_id": cover_id,
+        "catalog_checked_at": _iso(checked_at),
     }
 
 
@@ -122,6 +137,8 @@ class MongoBooks:
             "title": title,
             "author": author,
             "has_cover_photo": has_cover_photo,
+            "catalog_cover_id": None,
+            "catalog_checked_at": None,
         }
         try:
             result = self._collection().insert_one(document)
@@ -155,6 +172,29 @@ class MongoBooks:
         except (PyMongoError, OSError, ValueError):
             raise BooksUnavailable() from None
 
+    def set_catalog_cover(
+        self, subject: str, book_id: str, cover_id: int | None
+    ) -> dict[str, Any] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        now = datetime.now(timezone.utc)
+        try:
+            doc = self._collection().find_one_and_update(
+                {"_id": oid, "owner_sub": subject},
+                {
+                    "$set": {
+                        "catalog_cover_id": cover_id,
+                        "catalog_checked_at": now,
+                        "checked_at": now,
+                    }
+                },
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            return _public_book(doc) if doc else None
+        except (PyMongoError, OSError, ValueError):
+            raise BooksUnavailable() from None
+
     def update(
         self, subject: str, book_id: str, title: str, author: str | None
     ) -> dict[str, Any] | None:
@@ -162,9 +202,17 @@ class MongoBooks:
         if oid is None:
             return None
         try:
+            existing = self._collection().find_one({"_id": oid, "owner_sub": subject})
+            if existing is None:
+                return None
+            update_fields: dict[str, Any] = {"title": title, "author": author}
+            if existing.get("title") != title or existing.get("author") != author:
+                update_fields["catalog_cover_id"] = None
+                update_fields["catalog_checked_at"] = None
+                update_fields["checked_at"] = None
             doc = self._collection().find_one_and_update(
                 {"_id": oid, "owner_sub": subject},
-                {"$set": {"title": title, "author": author}},
+                {"$set": update_fields},
                 return_document=pymongo.ReturnDocument.AFTER,
             )
             return _public_book(doc) if doc else None

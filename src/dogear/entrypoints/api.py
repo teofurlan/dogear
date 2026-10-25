@@ -40,6 +40,13 @@ class BookInput(BaseModel):
 class Book(BookInput):
     id: str
     has_cover_photo: bool = False
+    catalog_cover_id: int | None = None
+    catalog_checked_at: str | None = None
+
+
+class CatalogCoverInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    cover_id: int | None = Field(default=..., gt=0)
 
 
 class CoverSuggestion(BaseModel):
@@ -385,6 +392,27 @@ def create_app() -> FastAPI:
             raise HTTPException(503, "Photo storage unavailable") from None
         finally:
             cover_slots.release()
+
+    @app.put(
+        "/books/{book_id}/catalog-cover",
+        response_model=Book,
+        tags=["books"],
+        responses={**BOOK_ERRORS, 404: {"description": "Unknown book"}},
+    )
+    def update_catalog_cover(
+        book_id: str,
+        body: CatalogCoverInput,
+        subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
+    ):
+        """Store Open Library cover lookup outcome on an own book."""
+        try:
+            updated = books.set_catalog_cover(subject, book_id, body.cover_id)
+        except BooksUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+        if updated is None:
+            raise HTTPException(404, "Book not found")
+        return updated
 
     @app.get(
         "/books/{book_id}/cover",
