@@ -31,8 +31,8 @@ The eventual workflow is capture on a phone, scheduled processing on Render, the
 - Implemented: extraction CLI, a measured Render cron run, a local FastAPI identity endpoint and owner-scoped MongoDB book creation/listing.
 - Verified: real Auth0 browser login through the React SDK, a clean callback and an authenticated local API book-list response. The account is empty; populated production rendering and live cover matching for that account remain unverified. A deployed API and a production PWA are not verified.
 - Current interface scope: login, an owner-scoped library with representative covers, and manual or cover-photo-assisted book entry with explicit confirmation.
-- Covers: a representative Open Library cover found from title and author is acceptable for now; it need not match the reader's exact edition. Use a neutral fallback when no reliable match is available.
-- Book entry now supports manual title/optional author and transient JPEG/PNG cover OCR suggestions. Suggestions are fallible, editable and require explicit save; the photo is not stored or used as the displayed cover. Reading status, page-photo uploads/persistence, editing existing books and quote review remain separate work.
+- Covers: a representative Open Library cover found from title and author is acceptable for now; it need not match the reader's exact edition. When no Open Library match is found, books created with a cover photo fall back to that stored photo; books without a photo use a neutral fallback.
+- Book entry supports manual title/optional author and JPEG/PNG cover OCR suggestions. Suggestions are fallible, editable and require explicit save; when added from a cover photo, the photo is stored owner-scoped in R2 and used as the fallback cover. Reading status, editing existing books and re-taking covers remain separate work.
 - Existing health, identity, ownership and extraction behavior must remain intact. Tokens and private configuration must not appear in public artifacts, logs or demonstration data.
 - English is the default for interface copy and repository artifacts. This is a project convention, not a new language preference inferred from the conversation.
 
@@ -43,7 +43,7 @@ The product name is Dogear. Show the full lowercase `dogear.` wordmark in the he
 ## Evidence on Hand
 
 - `README.md`, `docs/requirements.md` and `odd/tasks/dogear-mvp.md` describe implemented behavior, requirements and recorded evidence.
-- Existing API books expose `id`, `title` and optional `author`; they do not yet provide ISBN or cover metadata.
+- Existing API books expose `id`, `title`, optional `author` and `has_cover_photo`; they do not yet provide ISBN metadata.
 - Private book-page test photos are local-only fixtures. Do not publish the images or quote their extracted passages.
 - Test/demo books must be explicitly synthetic; no invented reader activity, quote counts or reading progress may be presented as actual account data.
 

@@ -1,3 +1,4 @@
+import {api} from './api.js';
 import {anySignal} from './signals.js';
 
 export const PAGE_SIZE = 24;
@@ -24,3 +25,15 @@ export async function listBooks(getToken, {after, signal} = {}) {
   )) throw new BooksError(503);
   return books;
 }
+
+export const fetchCover = (getToken, bookId, {signal} = {}) =>
+  api(getToken, `/books/${bookId}/cover`, {as: 'blob', signal});
+
+export const uploadCover = (getToken, bookId, file, {signal} = {}) =>
+  api(getToken, `/books/${bookId}/cover`, {
+    method: 'PUT',
+    body: file,
+    contentType: file.type,
+    signal,
+    timeout: 25000,
+  });

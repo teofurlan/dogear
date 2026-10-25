@@ -43,11 +43,16 @@ class MongoConfig:
         return cls(*values)
 
 
+def _object_id(value: str) -> ObjectId | None:
+    return ObjectId(value) if ObjectId.is_valid(value) else None
+
+
 def _public_book(document: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(document["_id"]),
         "title": document["title"],
         "author": document["author"],
+        "has_cover_photo": bool(document.get("has_cover_photo", False)),
     }
 
 
@@ -81,13 +86,58 @@ class MongoBooks:
                 self._client = make_client(self.config)
             return self._client[self.config.database]["books"]
 
-    def create(self, subject: str, title: str, author: str | None) -> dict[str, Any]:
-        document = {"owner_sub": subject, "title": title, "author": author}
+    def create(
+        self, subject: str, title: str, author: str | None, has_cover_photo: bool = False
+    ) -> dict[str, Any]:
+        document = {
+            "owner_sub": subject,
+            "title": title,
+            "author": author,
+            "has_cover_photo": has_cover_photo,
+        }
         try:
             result = self._collection().insert_one(document)
         except (PyMongoError, OSError, ValueError):
             raise BooksUnavailable() from None
         return _public_book({**document, "_id": result.inserted_id})
+
+    def get_for_owner(self, subject: str, book_id: str) -> dict[str, Any] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        try:
+            doc = self._collection().find_one({"_id": oid, "owner_sub": subject})
+            return _public_book(doc) if doc else None
+        except (PyMongoError, OSError, ValueError):
+            raise BooksUnavailable() from None
+
+    def set_cover_photo(
+        self, subject: str, book_id: str, has_cover_photo: bool = True
+    ) -> dict[str, Any] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        try:
+            doc = self._collection().find_one_and_update(
+                {"_id": oid, "owner_sub": subject},
+                {"$set": {"has_cover_photo": has_cover_photo}},
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            return _public_book(doc) if doc else None
+        except (PyMongoError, OSError, ValueError):
+            raise BooksUnavailable() from None
+
+    def owns_book(self, subject: str, book_id: str) -> bool:
+        oid = _object_id(book_id)
+        if oid is None:
+            return False
+        try:
+            return (
+                self._collection().find_one({"_id": oid, "owner_sub": subject})
+                is not None
+            )
+        except (PyMongoError, OSError, ValueError):
+            raise BooksUnavailable() from None
 
     def list_for_owner(
         self, subject: str, limit: int, after: str | None

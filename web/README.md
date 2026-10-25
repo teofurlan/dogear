@@ -43,9 +43,9 @@ Local Tesseract OCR suggests title/author from text size and layout;
 it is not a verified catalog identity and may mistake subtitles/publishers for an author.
 Review/edit both fields before saving. Unreadable or unavailable OCR never blocks manual entry.
 
-The photo is transient: it goes only to the authenticated local `/api/books/identify`
-endpoint, not to Open Library, MongoDB or object storage. Saving uses the existing
-owner-scoped API. Displayed covers still follow the representative-cover lookup below.
+The photo is sent to `/api/books/identify` for OCR suggestions. When saving a book
+added from a photo, the photo is stored in R2 and linked to the book as a fallback
+cover when Open Library has no match. Books entered manually store no photo.
 JPEG/PNG only: export HEIC/AVIF first. Cancel discards suggestions; switching accounts
 aborts pending work. A failed save can have an uncertain outcome: refresh the library
 before retrying rather than automatically repeating a write.
@@ -54,7 +54,7 @@ before retrying rather than automatically repeating a write.
 
 Cover search sends only each book's title and optional author to Open Library, not tokens, user IDs or the rest of a book record. The anonymous search queue allows at most one request every 1.1 seconds and bounds each request to four seconds. Cover results are cached only within the mounted account library. Book listing does not wait for covers.
 
-Title and author must match normalized metadata. An authorless book needs a single unambiguous match. Missing, ambiguous or unavailable results use a neutral cover treatment; image failures do not remove the title or author. A representative cover is not a guarantee of the exact edition. Images come directly from `covers.openlibrary.org`, with no referrer.
+Title and author must match normalized metadata. An authorless book needs a single unambiguous match. When Open Library finds no match, books created with a cover photo fall back to their stored photo; books without a photo use a neutral cover placeholder. Image failures do not remove the title or author. A representative cover is not a guarantee of the exact edition. Images come directly from `covers.openlibrary.org`, with no referrer.
 
 Sources: [Auth0 React SDK](https://auth0.github.io/auth0-react/), [Open Library API usage](https://openlibrary.org/developers/api), [cover API](https://openlibrary.org/dev/docs/api/covers).
 

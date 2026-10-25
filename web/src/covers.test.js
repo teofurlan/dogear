@@ -30,3 +30,44 @@ test('cover lookup stops after cancellation and never returns another account re
   expect(fetch).not.toHaveBeenCalled();
   expect(receive).not.toHaveBeenCalled();
 });
+
+test('stored cover photo is used as fallback when Open Library has no match', async () => {
+  const blob = new Blob(['photo-bytes'], {type: 'image/jpeg'});
+  const objectUrl = 'blob:http://localhost/stored-cover-123';
+  vi.stubGlobal('URL', {...URL, createObjectURL: vi.fn(() => objectUrl), revokeObjectURL: vi.fn()});
+
+  // Mock fetch for Open Library (returns no matches) and for /api/books/example/cover (returns blob)
+  const fetch = vi.fn().mockImplementation(async (url) => {
+    if (typeof url === 'string' && url.includes('openlibrary.org')) {
+      return {ok: true, json: async () => ({docs: []})};
+    }
+    if (typeof url === 'string' && url.includes('/api/books/example/cover')) {
+      return {ok: true, blob: async () => blob};
+    }
+    return {ok: false, status: 404};
+  });
+  vi.stubGlobal('fetch', fetch);
+
+  const bookWithCover = {...book, has_cover_photo: true};
+  const getToken = async () => 'test-token';
+  const result = await findCover(bookWithCover, new AbortController().signal, {getToken});
+
+  expect(result).toBe(objectUrl);
+  expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
+});
+
+test('Open Library match takes priority over stored cover photo', async () => {
+  const fetch = vi.fn().mockImplementation(async (url) => {
+    if (typeof url === 'string' && url.includes('openlibrary.org')) {
+      return {ok: true, json: async () => ({docs: [{title: book.title, author_name: [book.author], cover_i: 999}]})};
+    }
+    return {ok: false, status: 500};
+  });
+  vi.stubGlobal('fetch', fetch);
+
+  const bookWithCover = {...book, has_cover_photo: true};
+  const getToken = async () => 'test-token';
+  const result = await findCover(bookWithCover, new AbortController().signal, {getToken});
+
+  expect(result).toBe(coverUrl(999));
+});

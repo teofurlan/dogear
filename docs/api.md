@@ -37,6 +37,8 @@ an Auth0 **API access token** (not an ID token).
 | `POST /books` | `{"title":"A quiet morning","author":"Ada Reed"}` | `201`, with `id`, `title`, `author` |
 | `GET /books` | Optional `limit` and `after` query parameters | `200`, an array containing only your books |
 | `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"..."}`; creates nothing |
+| `PUT /books/{book_id}/cover` | Raw `image/jpeg` or `image/png` cover photo | `200`, the book with `has_cover_photo: true`; `404` for an unknown or other-owner book; `503` when storage is unavailable |
+| `GET /books/{book_id}/cover` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` without a stored photo |
 
 - Title is required; author may be omitted or `null`. Strings are trimmed and must contain
   1-300 characters. Extra fields, including any owner or ID, are rejected with `422`.
@@ -45,11 +47,16 @@ an Auth0 **API access token** (not an ID token).
   array ends the traversal. This is not a snapshot across concurrent inserts.
 - There is no edit or delete for books yet.
 
+Book payloads include `has_cover_photo` (`true` once a cover photo is stored). Book creation
+never depends on the photo: the web app sends it with `PUT /books/{book_id}/cover` after the book
+is saved, and reports it if that upload fails.
+
 ### Cover identification
 
 `POST /books/identify` takes the raw image bytes, not multipart or JSON. Local Tesseract OCR
 suggests a title and author from text size and layout; it is not catalog verification, and the
-web app always lets the reader correct the suggestion before saving. The photo is not stored.
+web app always lets the reader correct the suggestion before saving. This route does not store
+the photo.
 It needs Tesseract with Spanish data, but no Ollama or external catalog service.
 
 Image limits, shared with page uploads: 6 MiB, 20 megapixels, 10,000 pixels per side, a
@@ -57,6 +64,13 @@ Image limits, shared with page uploads: 6 MiB, 20 megapixels, 10,000 pixels per 
 
 Errors: `401` authentication, `408` upload deadline, `413` size, `415` format, `422`
 unreadable image, `429` busy readers, `503` unavailable auth or OCR.
+
+### Cover photo
+
+`PUT /books/{book_id}/cover` takes the raw image bytes (6 MiB, 20 megapixels, same limits as page
+uploads), re-encodes them as an upright JPEG and stores them in the private R2 bucket. Only the
+book's owner can fetch it with `GET /books/{book_id}/cover`, and the web app shows it when Open
+Library finds no cover match. Replacing a photo overwrites the previous one.
 
 ## Pages and quotes
 

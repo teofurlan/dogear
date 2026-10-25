@@ -22,6 +22,7 @@ from dogear.adapters.auth0_jwt import (
 from dogear.adapters.mongo_books import BooksUnavailable, MongoBooks, MongoConfig
 from dogear.adapters.mongo_captures import MongoCaptures
 from dogear.adapters.r2_photos import R2Config, R2Photos
+from dogear.application.covers import cover_key, prepare_cover_photo
 from dogear.application.identify import MAX_BYTES, CoverError, identify_cover
 from dogear.application.pages import page_key, prepare_page_photo
 from dogear.ports.captures import CapturesUnavailable, CaptureStore
@@ -36,6 +37,7 @@ class BookInput(BaseModel):
 
 class Book(BookInput):
     id: str
+    has_cover_photo: bool = False
 
 
 class CoverSuggestion(BaseModel):
@@ -129,6 +131,13 @@ async def read_photo_body(request: Request, what: str) -> bytes:
     return bytes(data)
 
 
+def book_store(request: Request) -> MongoBooks:
+    store = getattr(request.app.state, "books", None)
+    if store is None:
+        raise HTTPException(503, "Book storage unavailable")
+    return store
+
+
 def capture_store(request: Request) -> CaptureStore:
     """Pages and quotes live in the same MongoDB as books."""
     store = request.app.state.captures
@@ -171,7 +180,7 @@ def create_app() -> FastAPI:
                     await run_in_threadpool(closable.close)
 
     app = FastAPI(title="Dogear API", lifespan=lifespan)
-    app.state.captures, app.state.photos = captures, photos
+    app.state.books, app.state.captures, app.state.photos = books, captures, photos
     cover_slots = BoundedSemaphore(2)
     page_slots = BoundedSemaphore(2)
     app.add_api_route("/health", health, methods=["GET"], tags=["health"])
@@ -210,11 +219,6 @@ def create_app() -> FastAPI:
         """Return only the verified token subject, not a database user profile."""
         return {"sub": subject}
 
-    def book_store() -> MongoBooks:
-        if books is None:
-            raise HTTPException(503, "Book storage unavailable")
-        return books
-
     @app.post(
         "/books/identify",
         response_model=CoverSuggestion,
@@ -244,24 +248,109 @@ def create_app() -> FastAPI:
         tags=["books"],
         responses=BOOK_ERRORS,
     )
-    def create_book(book: BookInput, subject: Annotated[str, Depends(current_subject)]):
+    def create_book(
+        book: BookInput,
+        subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
+    ):
         """Create a book owned by the verified caller, never by a supplied user ID."""
         try:
-            return book_store().create(subject, book.title, book.author)
+            return books.create(subject, book.title, book.author)
         except BooksUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
 
     @app.get("/books", response_model=list[Book], tags=["books"], responses=BOOK_ERRORS)
     def list_books(
         subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         after: Annotated[str | None, Query(pattern="^[0-9a-fA-F]{24}$")] = None,
     ):
         """List own books by ascending ID; continue with the last returned ID as after."""
         try:
-            return book_store().list_for_owner(subject, limit, after)
+            return books.list_for_owner(subject, limit, after)
         except BooksUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
+
+    @app.put(
+        "/books/{book_id}/cover",
+        response_model=Book,
+        tags=["books"],
+        responses={**BOOK_ERRORS, **PHOTO_ERRORS, 404: {"description": "Unknown book"}},
+        openapi_extra=PHOTO_BODY,
+    )
+    async def upload_cover(
+        book_id: str,
+        request: Request,
+        subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
+        photos: Annotated[PhotoStore, Depends(photo_store)],
+    ):
+        """Store a book's cover photo (6 MiB/20 MP) for the fallback display."""
+        check_photo_headers(request)
+        try:
+            if not await run_in_threadpool(books.owns_book, subject, book_id):
+                raise HTTPException(404, "Book not found")
+        except BooksUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+        if not cover_slots.acquire(blocking=False):
+            raise HTTPException(429, "Cover readers are busy; try again shortly")
+        try:
+            data = await read_photo_body(request, "cover photo")
+            jpeg = await run_in_threadpool(prepare_cover_photo, data)
+            key = cover_key(subject, book_id)
+            await run_in_threadpool(photos.put, key, jpeg)
+            try:
+                updated = await run_in_threadpool(
+                    books.set_cover_photo, subject, book_id, True
+                )
+                if updated is None:
+                    raise HTTPException(404, "Book not found")
+                return updated
+            except BooksUnavailable:
+                with contextlib.suppress(PhotosUnavailable):
+                    await run_in_threadpool(photos.delete, key)
+                raise HTTPException(503, "Book storage unavailable") from None
+        except CoverError as error:
+            raise HTTPException(error.status, error.message) from None
+        except PhotosUnavailable:
+            raise HTTPException(503, "Photo storage unavailable") from None
+        finally:
+            cover_slots.release()
+
+    @app.get(
+        "/books/{book_id}/cover",
+        tags=["books"],
+        response_class=Response,
+        responses={
+            **BOOK_ERRORS,
+            404: {"description": "Unknown book or cover photo"},
+            200: {"content": {"image/jpeg": {}}},
+        },
+    )
+    async def get_cover(
+        book_id: str,
+        subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
+        photos: Annotated[PhotoStore, Depends(photo_store)],
+    ):
+        """The stored cover photo, returned only to the book's owner."""
+        try:
+            book = await run_in_threadpool(books.get_for_owner, subject, book_id)
+        except BooksUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+        if book is None or not book.get("has_cover_photo"):
+            raise HTTPException(404, "Cover photo not found")
+        key = cover_key(subject, book_id)
+        try:
+            data = await run_in_threadpool(photos.get, key)
+        except PhotosUnavailable:
+            raise HTTPException(503, "Photo storage unavailable") from None
+        return Response(
+            data,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "private, no-store"},
+        )
 
     @app.post(
         "/books/{book_id}/pages",
