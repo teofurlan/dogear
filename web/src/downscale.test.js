@@ -1,5 +1,5 @@
 import {afterEach, expect, test, vi} from 'vitest';
-import {fitWithin, prepareImage} from './downscale.js';
+import {fitWithin, ImageDecodeError, prepareImage} from './downscale.js';
 
 afterEach(() => {vi.unstubAllGlobals(); vi.restoreAllMocks();});
 
@@ -19,5 +19,21 @@ test('prepareImage re-encodes to JPEG at quality 0.85', async () => {
   expect(await prepareImage(new File(['x'], 'p.png', {type: 'image/png'}))).toBe(out);
   expect(canvas.width).toBe(2400); expect(canvas.height).toBe(1600);
   expect(toBlob.mock.calls[0].slice(1)).toEqual(['image/jpeg', 0.85]);
+  expect(close).toHaveBeenCalled();
+});
+
+test('prepareImage throws ImageDecodeError when decoding fails', async () => {
+  vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new Error('decode failed')));
+  await expect(prepareImage(new File(['bad'], 'bad.heic', {type: 'image/heic'})))
+    .rejects.toThrow(ImageDecodeError);
+});
+
+test('prepareImage throws ImageDecodeError and closes bitmap when encoding fails', async () => {
+  const close = vi.fn();
+  vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({width: 100, height: 100, close}));
+  const canvas = {getContext: () => ({drawImage: vi.fn()}), toBlob: vi.fn(cb => cb(null))};
+  vi.spyOn(document, 'createElement').mockReturnValue(canvas);
+  await expect(prepareImage(new File(['x'], 'p.jpg', {type: 'image/jpeg'})))
+    .rejects.toThrow(ImageDecodeError);
   expect(close).toHaveBeenCalled();
 });

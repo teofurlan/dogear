@@ -7,7 +7,7 @@ import {listPages, uploadPage} from './pages.js';
 import {prepareImage} from './downscale.js';
 
 vi.mock('./pages.js', () => ({listPages: vi.fn(), uploadPage: vi.fn()}));
-vi.mock('./downscale.js', () => ({prepareImage: vi.fn()}));
+vi.mock('./downscale.js', () => ({prepareImage: vi.fn(), ImageDecodeError: class ImageDecodeError extends Error {}}));
 const getToken = async () => 'tok';
 const id = '000000000000000000000001';
 const file = name => new File(['raw'], name, {type: 'image/jpeg'});
@@ -51,6 +51,22 @@ test('an oversized photo shows a clear message and the next photo still uploads'
   render(<PageCapture getToken={getToken} bookId={id} />);
   await userEvent.upload(screen.getByLabelText(/Photograph a page/), [file('a.jpg'), file('b.jpg')]);
   expect(await screen.findByText(/a\.jpg: .*too large/i)).toBeInTheDocument();
+  expect(await screen.findByText('b.jpg: uploaded')).toBeInTheDocument();
+});
+
+test('an undecodable photo shows a format message and the next photo still uploads', async () => {
+  prepareImage.mockRejectedValueOnce(new Error('cannot decode'));
+  render(<PageCapture getToken={getToken} bookId={id} />);
+  await userEvent.upload(screen.getByLabelText(/Photograph a page/), [file('a.heic'), file('b.jpg')]);
+  expect(await screen.findByText(/a\.heic: This photo format could not be read on this device\. Try a JPEG or PNG, or take the photo with the camera\./)).toBeInTheDocument();
+  expect(await screen.findByText('b.jpg: uploaded')).toBeInTheDocument();
+});
+
+test('a connection error shows the connection message and the next photo still uploads', async () => {
+  uploadPage.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  render(<PageCapture getToken={getToken} bookId={id} />);
+  await userEvent.upload(screen.getByLabelText(/Photograph a page/), [file('a.jpg'), file('b.jpg')]);
+  expect(await screen.findByText(/a\.jpg: The upload failed\. Check your connection and try again\./)).toBeInTheDocument();
   expect(await screen.findByText('b.jpg: uploaded')).toBeInTheDocument();
 });
 

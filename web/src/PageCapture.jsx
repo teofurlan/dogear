@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {listPages, uploadPage} from './pages.js';
 import {prepareImage} from './downscale.js';
 
+const DECODE_MESSAGE = 'This photo format could not be read on this device. Try a JPEG or PNG, or take the photo with the camera.';
 const MESSAGES = {
   401: 'Your session ended. Sign in again before uploading.',
   413: 'That photo is too large. Try again with a smaller one.',
@@ -50,8 +51,15 @@ export default function PageCapture({getToken, bookId}) {
     for (const [index, file] of files.entries()) {
       if (!alive.current) break;
       patch(index, 'uploading');
+      let image;
       try {
-        await uploadPage(getToken, bookId, await prepareImage(file));
+        image = await prepareImage(file);
+      } catch {
+        patch(index, 'error', DECODE_MESSAGE);
+        continue;
+      }
+      try {
+        await uploadPage(getToken, bookId, image);
         patch(index, 'done');
       } catch (problem) {
         patch(index, 'error', failure(problem));
