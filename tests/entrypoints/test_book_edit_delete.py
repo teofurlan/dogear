@@ -75,7 +75,9 @@ def test_leaving_the_author_out_clears_it(library):
 def test_editing_title_or_author_clears_catalog_cover(library):
     client, headers, books, _, _ = library
     book = books.create(ALICE, "Original Title", "Original Author")
-    books.set_catalog_cover(ALICE, book["id"], 12345)
+    books.set_catalog_cover(
+        ALICE, book["id"], 12345, "Original Title", "Original Author"
+    )
     matched = books.get_for_owner(ALICE, book["id"])
     assert matched["catalog_cover_id"] == 12345
     assert matched["catalog_checked_at"] is not None
@@ -91,7 +93,9 @@ def test_editing_title_or_author_clears_catalog_cover(library):
     assert res1.json()["catalog_checked_at"] is None
 
     # Reset catalog cover
-    books.set_catalog_cover(ALICE, book["id"], 67890)
+    books.set_catalog_cover(
+        ALICE, book["id"], 67890, "New Title", "Original Author"
+    )
 
     # Editing author clears both catalog fields
     res2 = client.patch(
@@ -104,7 +108,9 @@ def test_editing_title_or_author_clears_catalog_cover(library):
     assert res2.json()["catalog_checked_at"] is None
 
     # Reset catalog cover
-    books.set_catalog_cover(ALICE, book["id"], 99999)
+    books.set_catalog_cover(
+        ALICE, book["id"], 99999, "New Title", "New Author"
+    )
 
     # Editing with same title and author preserves catalog fields
     res3 = client.patch(

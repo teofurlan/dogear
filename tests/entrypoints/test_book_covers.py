@@ -208,7 +208,11 @@ def test_put_catalog_cover_matched_stores_id_and_checked_at(cover_fixture):
 
     res = client.put(
         f"/books/{book_id}/catalog-cover",
-        json={"cover_id": 12345},
+        json={
+            "cover_id": 12345,
+            "title": alice_book["title"],
+            "author": alice_book["author"],
+        },
         headers=headers(ALICE),
     )
     assert res.status_code == 200
@@ -228,7 +232,11 @@ def test_put_catalog_cover_null_stores_no_match(cover_fixture):
 
     res = client.put(
         f"/books/{book_id}/catalog-cover",
-        json={"cover_id": None},
+        json={
+            "cover_id": None,
+            "title": alice_book["title"],
+            "author": alice_book["author"],
+        },
         headers=headers(ALICE),
     )
     assert res.status_code == 200
@@ -242,16 +250,76 @@ def test_put_catalog_cover_null_stores_no_match(cover_fixture):
     assert stored["catalog_checked_at"] == data["catalog_checked_at"]
 
 
+def test_put_catalog_cover_returns_409_when_title_or_author_differ(cover_fixture):
+    client, headers, books, _, alice_book, _ = cover_fixture
+    book_id = alice_book["id"]
+
+    # Mismatched title returns 409 and stores nothing
+    res_title = client.put(
+        f"/books/{book_id}/catalog-cover",
+        json={
+            "cover_id": 12345,
+            "title": "A Different Title",
+            "author": alice_book["author"],
+        },
+        headers=headers(ALICE),
+    )
+    assert res_title.status_code == 409
+    assert res_title.json() == {"detail": "Book changed"}
+    stored = books.get_for_owner(ALICE, book_id)
+    assert stored["catalog_cover_id"] is None
+    assert stored["catalog_checked_at"] is None
+
+    # Mismatched author returns 409 and stores nothing
+    res_author = client.put(
+        f"/books/{book_id}/catalog-cover",
+        json={
+            "cover_id": 12345,
+            "title": alice_book["title"],
+            "author": "Different Author",
+        },
+        headers=headers(ALICE),
+    )
+    assert res_author.status_code == 409
+    assert res_author.json() == {"detail": "Book changed"}
+    stored = books.get_for_owner(ALICE, book_id)
+    assert stored["catalog_cover_id"] is None
+    assert stored["catalog_checked_at"] is None
+
+    # Author None when book has author returns 409
+    res_none_author = client.put(
+        f"/books/{book_id}/catalog-cover",
+        json={
+            "cover_id": 12345,
+            "title": alice_book["title"],
+            "author": None,
+        },
+        headers=headers(ALICE),
+    )
+    assert res_none_author.status_code == 409
+    assert res_none_author.json() == {"detail": "Book changed"}
+
+
 @pytest.mark.parametrize(
     "payload",
     [
-        {"cover_id": 0},
-        {"cover_id": -1},
-        {"cover_id": -999},
-        {"cover_id": "12345"},
-        {"cover_id": 12.34},
+        {"cover_id": 0, "title": "Valid", "author": "Valid"},
+        {"cover_id": -1, "title": "Valid", "author": "Valid"},
+        {"cover_id": -999, "title": "Valid", "author": "Valid"},
+        {"cover_id": "12345", "title": "Valid", "author": "Valid"},
+        {"cover_id": 12.34, "title": "Valid", "author": "Valid"},
         {},
-        {"cover_id": 123, "extra": "field"},
+        {"cover_id": 123, "title": "Valid", "author": "Valid", "extra": "field"},
+        {"cover_id": 123, "author": "Valid"},
+        {"cover_id": 123, "title": "", "author": "Valid"},
+        {"cover_id": 123, "title": "   ", "author": "Valid"},
+        {"cover_id": 123, "title": "x" * 301, "author": "Valid"},
+        {"cover_id": 123, "title": 123, "author": "Valid"},
+        {"cover_id": 123, "title": "Valid"},
+        {"cover_id": 123, "title": "Valid", "author": ""},
+        {"cover_id": 123, "title": "Valid", "author": "   "},
+        {"cover_id": 123, "title": "Valid", "author": "x" * 301},
+        {"cover_id": 123, "title": "Valid", "author": 123},
     ],
 )
 def test_put_catalog_cover_rejects_invalid_payload(cover_fixture, payload):
@@ -267,14 +335,24 @@ def test_put_catalog_cover_rejects_invalid_payload(cover_fixture, payload):
 
 def test_put_catalog_cover_owner_scoping_and_not_found(cover_fixture):
     client, headers, _, _, alice_book, bob_book = cover_fixture
+    valid_body = {
+        "cover_id": 123,
+        "title": alice_book["title"],
+        "author": alice_book["author"],
+    }
 
     # Unauthenticated
-    assert client.put(f"/books/{alice_book['id']}/catalog-cover", json={"cover_id": 1}).status_code == 401
+    assert (
+        client.put(
+            f"/books/{alice_book['id']}/catalog-cover", json=valid_body
+        ).status_code
+        == 401
+    )
 
     # Bob cannot update Alice's book (404)
     res = client.put(
         f"/books/{alice_book['id']}/catalog-cover",
-        json={"cover_id": 123},
+        json=valid_body,
         headers=headers(BOB),
     )
     assert res.status_code == 404
@@ -283,7 +361,7 @@ def test_put_catalog_cover_owner_scoping_and_not_found(cover_fixture):
     fake_id = str(ObjectId())
     res = client.put(
         f"/books/{fake_id}/catalog-cover",
-        json={"cover_id": 123},
+        json=valid_body,
         headers=headers(ALICE),
     )
     assert res.status_code == 404
@@ -291,7 +369,7 @@ def test_put_catalog_cover_owner_scoping_and_not_found(cover_fixture):
     # Malformed book id (404)
     res = client.put(
         "/books/not-an-id/catalog-cover",
-        json={"cover_id": 123},
+        json=valid_body,
         headers=headers(ALICE),
     )
     assert res.status_code == 404
@@ -307,7 +385,11 @@ def test_put_catalog_cover_db_unavailable_returns_503(cover_fixture, monkeypatch
     monkeypatch.setattr(books, "set_catalog_cover", failing_set)
     res = client.put(
         f"/books/{alice_book['id']}/catalog-cover",
-        json={"cover_id": 123},
+        json={
+            "cover_id": 123,
+            "title": alice_book["title"],
+            "author": alice_book["author"],
+        },
         headers=headers(ALICE),
     )
     assert res.status_code == 503

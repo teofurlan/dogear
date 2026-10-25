@@ -42,7 +42,7 @@ an Auth0 **API access token** (not an ID token).
 | `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"..."}`; creates nothing |
 | `PUT /books/{book_id}/cover` | Raw `image/jpeg` or `image/png` cover photo | `200`, the book with `has_cover_photo: true`; `404` for an unknown or other-owner book; `503` when storage is unavailable |
 | `GET /books/{book_id}/cover` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` without a stored photo |
-| `PUT /books/{book_id}/catalog-cover` | `{"cover_id": 12345}` or `{"cover_id": null}` | `200`, the book with `catalog_cover_id` and `catalog_checked_at`; `404` for an unknown or other-owner book |
+| `PUT /books/{book_id}/catalog-cover` | `{"cover_id": 12345, "title": "...", "author": "..."}` or `{"cover_id": null, ...}` | `200`, the book with `catalog_cover_id` and `catalog_checked_at`; `404` for an unknown or other-owner book; `409` when title or author no longer match |
 
 - Title is required; author may be omitted or `null`. Strings are trimmed and must contain
   1-300 characters. Extra fields, including any owner or ID, are rejected with `422`.
@@ -87,10 +87,13 @@ Library finds no cover match. Replacing a photo overwrites the previous one.
 
 ### Catalog cover match
 
-`PUT /books/{book_id}/catalog-cover` records an Open Library lookup result (`{"cover_id": <int> | null}`)
-on an own book together with a server-set `catalog_checked_at` UTC timestamp. `cover_id` must be
-a positive integer or `null` (representing searched with no match). Non-integer, zero, negative, or
-unrecognized fields are rejected with `422`. Unknown or other-owner books return `404`.
+`PUT /books/{book_id}/catalog-cover` records an Open Library lookup result
+(`{"cover_id": <int> | null, "title": <str>, "author": <str> | null}`) on an own book together with a
+server-set `catalog_checked_at` UTC timestamp. `cover_id` must be a positive integer or `null`
+(representing searched with no match). The result is stored only when the book's current title and author
+match the searched values; if the book exists but title or author no longer match, the server responds
+`409` (`{"detail": "Book changed"}`) and stores nothing. Non-integer, zero, negative, or unrecognized
+fields, or missing/invalid title/author, are rejected with `422`. Unknown or other-owner books return `404`.
 
 ## Pages and quotes
 

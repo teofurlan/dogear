@@ -18,6 +18,10 @@ class BooksUnavailable(Exception):
     """Storage cannot safely complete the requested operation."""
 
 
+class BookChanged(Exception):
+    """The book exists for the owner but title or author no longer match."""
+
+
 @dataclass(frozen=True)
 class MongoConfig:
     uri: str = field(repr=False)
@@ -169,7 +173,12 @@ class MongoBooks:
             raise BooksUnavailable() from None
 
     def set_catalog_cover(
-        self, subject: str, book_id: str, cover_id: int | None
+        self,
+        subject: str,
+        book_id: str,
+        cover_id: int | None,
+        title: str,
+        author: str | None,
     ) -> dict[str, Any] | None:
         oid = _object_id(book_id)
         if oid is None:
@@ -177,7 +186,7 @@ class MongoBooks:
         now = datetime.now(timezone.utc)
         try:
             doc = self._collection().find_one_and_update(
-                {"_id": oid, "owner_sub": subject},
+                {"_id": oid, "owner_sub": subject, "title": title, "author": author},
                 {
                     "$set": {
                         "catalog_cover_id": cover_id,
@@ -186,7 +195,13 @@ class MongoBooks:
                 },
                 return_document=pymongo.ReturnDocument.AFTER,
             )
-            return _public_book(doc) if doc else None
+            if doc:
+                return _public_book(doc)
+            if self._collection().find_one(
+                {"_id": oid, "owner_sub": subject}, {"_id": 1}
+            ):
+                raise BookChanged()
+            return None
         except (PyMongoError, OSError, ValueError):
             raise BooksUnavailable() from None
 
@@ -197,16 +212,23 @@ class MongoBooks:
         if oid is None:
             return None
         try:
-            existing = self._collection().find_one({"_id": oid, "owner_sub": subject})
-            if existing is None:
-                return None
-            update_fields: dict[str, Any] = {"title": title, "author": author}
-            if existing.get("title") != title or existing.get("author") != author:
-                update_fields["catalog_cover_id"] = None
-                update_fields["catalog_checked_at"] = None
+            doc = self._collection().find_one_and_update(
+                {"_id": oid, "owner_sub": subject, "title": title, "author": author},
+                {"$set": {"title": title, "author": author}},
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            if doc:
+                return _public_book(doc)
             doc = self._collection().find_one_and_update(
                 {"_id": oid, "owner_sub": subject},
-                {"$set": update_fields},
+                {
+                    "$set": {
+                        "title": title,
+                        "author": author,
+                        "catalog_cover_id": None,
+                        "catalog_checked_at": None,
+                    }
+                },
                 return_document=pymongo.ReturnDocument.AFTER,
             )
             return _public_book(doc) if doc else None

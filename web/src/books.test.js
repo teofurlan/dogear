@@ -103,21 +103,21 @@ test('deleteBook sends DELETE and rejects with the status on failure', async () 
   await expect(deleteBook(async () => 'token', book.id)).rejects.toMatchObject({status:404});
 });
 
-test('setCatalogCover puts cover_id as JSON and returns the updated book', async () => {
+test('setCatalogCover puts cover_id, title, and author as JSON and returns the updated book', async () => {
   const updated = {...book, catalog_cover_id: 12345, catalog_checked_at: '2026-10-25T12:00:00Z'};
   const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => updated});
   vi.stubGlobal('fetch', fetch);
 
-  const result = await setCatalogCover(async () => 'auth-token', book.id, 12345);
+  const result = await setCatalogCover(async () => 'auth-token', book.id, 12345, {title: book.title, author: book.author});
   expect(result).toEqual(updated);
   let [url, options] = fetch.mock.calls[0];
   expect(url).toBe('/api/books/' + book.id + '/catalog-cover');
   expect(options.method).toBe('PUT');
   expect(options.headers).toEqual({Authorization: 'Bearer auth-token', 'Content-Type': 'application/json'});
-  expect(options.body).toBe('{"cover_id":12345}');
+  expect(options.body).toBe('{"cover_id":12345,"title":"Example","author":null}');
 
-  // null cover_id for no-match
-  await setCatalogCover(async () => 'auth-token', book.id, null);
+  // null cover_id for no-match with an author
+  await setCatalogCover(async () => 'auth-token', book.id, null, {title: 'Dune', author: 'Frank Herbert'});
   [, options] = fetch.mock.calls[1];
-  expect(options.body).toBe('{"cover_id":null}');
+  expect(options.body).toBe('{"cover_id":null,"title":"Dune","author":"Frank Herbert"}');
 });

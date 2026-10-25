@@ -24,7 +24,7 @@ export async function findCover(book, signal, {getToken} = {}) {
   const stored = coverUrl(book?.catalog_cover_id);
   if (stored) return stored;
   if (checkedRecently(book)) return photoFallback(book, signal, getToken);
-  let searched = false;
+  let definite = false;
   let coverId = null;
   try {
     const query = new URLSearchParams({title: book.title, fields: 'title,author_name,cover_i,key', limit: '5'});
@@ -36,17 +36,17 @@ export async function findCover(book, signal, {getToken} = {}) {
     if (!response.ok) throw new Error('Open Library lookup failed');
     const data = await response.json();
     if (Array.isArray(data.docs)) {
-      searched = true;
       const matches = data.docs.filter(candidate =>
         normalize(candidate.title) === normalize(book.title) && coverUrl(candidate.cover_i) &&
         (!book.author || (Array.isArray(candidate.author_name) && candidate.author_name.some(author => normalize(author) === normalize(book.author))))
       );
       if ((book.author || matches.length === 1) && matches.length) coverId = matches[0].cover_i;
+      definite = coverId !== null || matches.length === 0;
     } else throw new Error('Malformed Open Library response');
   } catch { /* lookup failed; do not persist a no-match */ }
 
   // Best effort: a failed save only means the next visit searches again.
-  if (searched && getToken) Promise.resolve(setCatalogCover(getToken, book.id, coverId)).catch(() => {});
+  if (definite && getToken) Promise.resolve(setCatalogCover(getToken, book.id, coverId, {title: book.title, author: book.author})).catch(() => {});
   return coverUrl(coverId) || photoFallback(book, signal, getToken);
 }
 

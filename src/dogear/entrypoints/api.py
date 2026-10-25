@@ -19,7 +19,12 @@ from dogear.adapters.auth0_jwt import (
     AuthenticationUnavailable,
     InvalidAccessToken,
 )
-from dogear.adapters.mongo_books import BooksUnavailable, MongoBooks, MongoConfig
+from dogear.adapters.mongo_books import (
+    BookChanged,
+    BooksUnavailable,
+    MongoBooks,
+    MongoConfig,
+)
 from dogear.adapters.mongo_captures import MongoCaptures
 from dogear.adapters.r2_photos import R2Config, R2Photos
 from dogear.application.books import delete_book as delete_book_with_contents
@@ -45,8 +50,10 @@ class Book(BookInput):
 
 
 class CatalogCoverInput(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, strict=True)
     cover_id: int | None = Field(default=..., gt=0)
+    title: str = Field(min_length=1, max_length=300)
+    author: str | None = Field(default=..., min_length=1, max_length=300)
 
 
 class CoverSuggestion(BaseModel):
@@ -397,7 +404,11 @@ def create_app() -> FastAPI:
         "/books/{book_id}/catalog-cover",
         response_model=Book,
         tags=["books"],
-        responses={**BOOK_ERRORS, 404: {"description": "Unknown book"}},
+        responses={
+            **BOOK_ERRORS,
+            404: {"description": "Unknown book"},
+            409: {"description": "Book changed"},
+        },
     )
     def update_catalog_cover(
         book_id: str,
@@ -407,7 +418,11 @@ def create_app() -> FastAPI:
     ):
         """Store Open Library cover lookup outcome on an own book."""
         try:
-            updated = books.set_catalog_cover(subject, book_id, body.cover_id)
+            updated = books.set_catalog_cover(
+                subject, book_id, body.cover_id, body.title, body.author
+            )
+        except BookChanged:
+            raise HTTPException(409, "Book changed")
         except BooksUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
         if updated is None:
