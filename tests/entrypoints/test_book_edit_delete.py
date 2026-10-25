@@ -7,6 +7,8 @@ from dogear.adapters.mongo_captures import MongoCaptures
 from dogear.application.covers import cover_key
 from dogear.application.pages import page_key
 from dogear.entrypoints import api
+from dogear.ports.captures import CapturesUnavailable
+from dogear.ports.photo_store import PhotosUnavailable
 from tests.adapters.fake_mongo import FakeDatabase
 from tests.fakes import FakePhotos
 
@@ -145,6 +147,46 @@ def test_a_photo_store_failure_keeps_the_book_so_deleting_can_be_retried(library
     photos.delete_fails = False
     assert client.delete(f"/books/{book}", headers=headers()).status_code == 204
     assert key not in photos.objects
+
+
+def test_a_photo_store_failing_partway_still_lets_a_retry_finish(library, monkeypatch):
+    client, headers, books, captures, photos = library
+    book = books.create(ALICE, "Half gone", None)["id"]
+    keys = [add_page(captures, photos, ALICE, book, f"waiting-{n}") for n in range(2)]
+    real_delete, calls = photos.delete, []
+
+    def fails_second_time(key):
+        calls.append(key)
+        if len(calls) == 2:
+            raise PhotosUnavailable()
+        real_delete(key)
+
+    monkeypatch.setattr(photos, "delete", fails_second_time)
+    assert client.delete(f"/books/{book}", headers=headers()).status_code == 503
+    assert books.get_for_owner(ALICE, book) is not None
+    assert len(captures.list_pages(ALICE, book)) == 2
+    assert client.delete(f"/books/{book}", headers=headers()).status_code == 204
+    assert not set(keys) & set(photos.objects)
+    assert captures.list_pages(ALICE, book) == []
+
+
+def test_book_storage_failing_after_the_photos_still_lets_a_retry_finish(library, monkeypatch):
+    client, headers, books, captures, photos = library
+    book = books.create(ALICE, "Photos gone", None)["id"]
+    key = add_page(captures, photos, ALICE, book, "waiting")
+    captures.add_quote(ALICE, book, "Kept")
+    real_delete_book = captures.delete_book
+
+    def unavailable(*args):
+        raise CapturesUnavailable()
+
+    monkeypatch.setattr(captures, "delete_book", unavailable)
+    response = client.delete(f"/books/{book}", headers=headers())
+    assert response.status_code == 503 and response.json() == {"detail": "Book storage unavailable"}
+    assert key not in photos.objects and books.get_for_owner(ALICE, book) is not None
+    monkeypatch.setattr(captures, "delete_book", real_delete_book)
+    assert client.delete(f"/books/{book}", headers=headers()).status_code == 204
+    assert captures.list_quotes(ALICE, None, None) == []
 
 
 def test_a_night_run_reading_a_page_during_deletion_leaves_nothing_behind(library):

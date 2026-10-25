@@ -113,6 +113,25 @@ test('a failed deletion keeps the book and says so', async () => {
   expect(onDeleted).not.toHaveBeenCalled();
 });
 
+test('a book already deleted elsewhere is treated as deleted', async () => {
+  vi.mocked(deleteBook).mockRejectedValue(failure(404));
+  const {onDeleted} = setup();
+  await userEvent.click(screen.getByRole('button', {name: 'Delete book'}));
+  await screen.findByText(/3 kept quotes/);
+  await userEvent.click(screen.getByRole('button', {name: 'Delete book'}));
+  expect(onDeleted).toHaveBeenCalledWith(book.id);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('editing a book deleted elsewhere says it is no longer in the library', async () => {
+  vi.mocked(updateBook).mockRejectedValue(failure(404));
+  const {onChanged} = setup();
+  await userEvent.click(screen.getByRole('button', {name: 'Edit details'}));
+  await userEvent.click(screen.getByRole('button', {name: 'Save details'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('This book is no longer in your library.');
+  expect(onChanged).not.toHaveBeenCalled();
+});
+
 test('an expired session reports it instead of an error', async () => {
   vi.mocked(updateBook).mockRejectedValue(failure(401));
   const {onSessionExpired} = setup();

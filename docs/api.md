@@ -51,9 +51,10 @@ an Auth0 **API access token** (not an ID token).
   matches the query string, case- and accent-insensitively, while preserving `limit` and `after`
   pagination. This is not a snapshot across concurrent inserts.
 - Deleting removes the photos first (waiting page photos and the cover photo), then the book,
-  its pages and its quotes. If photo storage fails the request answers `503` and nothing is
-  removed, so it can be retried; it therefore needs R2 configured. A night run that was reading
-  one of the book's pages discards what it found once it sees the book is gone.
+  its pages and its quotes, so no photo is ever left without a record. If storage fails the
+  request answers `503` and the book stays, possibly without some of those photos; deleting
+  again finishes the job. It therefore needs R2 configured. A night run that was reading one of
+  the book's pages discards what it found once it sees the book is gone.
 
 Book payloads include `has_cover_photo` (`true` once a cover photo is stored). Book creation
 never depends on the photo: the web app sends it with `PUT /books/{book_id}/cover` after the book

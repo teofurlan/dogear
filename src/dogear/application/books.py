@@ -15,8 +15,9 @@ def delete_book(
 ) -> bool:
     """Remove an own book, its quotes, pages and photos; False if unknown or foreign.
 
-    Photos go first: if the photo store fails nothing else is removed, so a retry is
-    safe. Raises CapturesUnavailable or PhotosUnavailable.
+    Photos go first, so a failure never leaves photos without a record pointing at
+    them. A failure can leave the book with some photos already gone; deleting again
+    finishes the job. Raises CapturesUnavailable or PhotosUnavailable.
     """
     book = captures.get_book(owner, book_id)
     if book is None:

@@ -63,7 +63,11 @@ export default function BookActions({book, getToken, uploading, onSessionExpired
   }
 
   const remove = () => run(async () => {
-    await deleteBook(getToken, book.id);
+    try {
+      await deleteBook(getToken, book.id);
+    } catch (problem) {
+      if (problem?.status !== 404) throw problem;  // already gone, e.g. from another tab
+    }
     onDeleted(book.id);
   }, 'The book was not deleted. Please try again.');
 
