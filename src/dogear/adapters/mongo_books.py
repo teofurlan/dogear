@@ -59,17 +59,13 @@ def _iso(moment: datetime | str | None) -> str | None:
 
 
 def _public_book(document: dict[str, Any]) -> dict[str, Any]:
-    cover_id = document.get("catalog_cover_id")
-    if cover_id is None and "cover_id" in document:
-        cover_id = document.get("cover_id")
-    checked_at = document.get("catalog_checked_at") or document.get("checked_at")
     return {
         "id": str(document["_id"]),
         "title": document["title"],
         "author": document["author"],
         "has_cover_photo": bool(document.get("has_cover_photo", False)),
-        "catalog_cover_id": cover_id,
-        "catalog_checked_at": _iso(checked_at),
+        "catalog_cover_id": document.get("catalog_cover_id"),
+        "catalog_checked_at": _iso(document.get("catalog_checked_at")),
     }
 
 
@@ -186,7 +182,6 @@ class MongoBooks:
                     "$set": {
                         "catalog_cover_id": cover_id,
                         "catalog_checked_at": now,
-                        "checked_at": now,
                     }
                 },
                 return_document=pymongo.ReturnDocument.AFTER,
@@ -209,7 +204,6 @@ class MongoBooks:
             if existing.get("title") != title or existing.get("author") != author:
                 update_fields["catalog_cover_id"] = None
                 update_fields["catalog_checked_at"] = None
-                update_fields["checked_at"] = None
             doc = self._collection().find_one_and_update(
                 {"_id": oid, "owner_sub": subject},
                 {"$set": update_fields},

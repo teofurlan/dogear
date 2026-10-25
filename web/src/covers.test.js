@@ -78,9 +78,9 @@ test('recently checked no-match skips search and uses photo fallback', async () 
 test('stale no-match is searched again', async () => {
   const fetch = vi.fn().mockResolvedValue({ok: true, json: async () => ({docs: []})}); vi.stubGlobal('fetch', fetch);
   const stale = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  await findCover({...book, catalog_cover_id: null, catalog_checked_at: stale}, new AbortController().signal);
+  await findCover({...book, catalog_cover_id: null, catalog_checked_at: stale}, new AbortController().signal, {getToken: 'token'});
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(setCatalogCover).toHaveBeenCalledWith(undefined, book.id, null, expect.any(Object));
+  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, null);
 });
 
 test.each([
@@ -97,14 +97,14 @@ test('matched cover is saved and failed save does not hide it', async () => {
   setCatalogCover.mockRejectedValue(new Error('save failed'));
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, json: async () => ({docs: [{title: book.title, author_name: [book.author], cover_i: 456}]})}));
   expect(await findCover(book, new AbortController().signal, {getToken: 'token'})).toBe(coverUrl(456));
-  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, 456, expect.any(Object));
+  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, 456);
 });
 
 test('searched no-match is saved as null and failed save preserves fallback', async () => {
   setCatalogCover.mockRejectedValue(new Error('save failed'));
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, json: async () => ({docs: []})}));
-  expect(await findCover(book, new AbortController().signal)).toBeNull();
-  expect(setCatalogCover).toHaveBeenCalledWith(undefined, book.id, null, expect.any(Object));
+  expect(await findCover(book, new AbortController().signal, {getToken: 'token'})).toBeNull();
+  expect(setCatalogCover).toHaveBeenCalledWith('token', book.id, null);
 });
 
 test('Open Library match takes priority over stored cover photo', async () => {

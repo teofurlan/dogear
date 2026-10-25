@@ -37,17 +37,16 @@ export async function findCover(book, signal, {getToken} = {}) {
     const data = await response.json();
     if (Array.isArray(data.docs)) {
       searched = true;
-        const matches = data.docs.filter(candidate =>
-          normalize(candidate.title) === normalize(book.title) && coverUrl(candidate.cover_i) &&
-          (!book.author || (Array.isArray(candidate.author_name) && candidate.author_name.some(author => normalize(author) === normalize(book.author))))
-        );
+      const matches = data.docs.filter(candidate =>
+        normalize(candidate.title) === normalize(book.title) && coverUrl(candidate.cover_i) &&
+        (!book.author || (Array.isArray(candidate.author_name) && candidate.author_name.some(author => normalize(author) === normalize(book.author))))
+      );
       if ((book.author || matches.length === 1) && matches.length) coverId = matches[0].cover_i;
     } else throw new Error('Malformed Open Library response');
   } catch { /* lookup failed; do not persist a no-match */ }
 
-  if (searched) {
-    try { await setCatalogCover(getToken, book.id, coverId, {signal}); } catch { /* best effort */ }
-  }
+  // Best effort: a failed save only means the next visit searches again.
+  if (searched && getToken) Promise.resolve(setCatalogCover(getToken, book.id, coverId)).catch(() => {});
   return coverUrl(coverId) || photoFallback(book, signal, getToken);
 }
 
