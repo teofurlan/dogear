@@ -36,6 +36,15 @@ def _iso(moment: datetime) -> str:
     return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)).isoformat()
 
 
+def _public_book(document: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(document["_id"]),
+        "title": document["title"],
+        "author": document.get("author"),
+        "has_cover_photo": bool(document.get("has_cover_photo", False)),
+    }
+
+
 def _public_page(document: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": document["_id"],
@@ -88,6 +97,26 @@ class MongoCaptures:
         if oid is None:
             return False
         return self._db()["books"].find_one({"_id": oid, "owner_sub": owner}) is not None
+
+    @_unavailable_on_failure
+    def get_book(self, owner: str, book_id: str) -> dict[str, Any] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        doc = self._db()["books"].find_one({"_id": oid, "owner_sub": owner})
+        return _public_book(doc) if doc else None
+
+    @_unavailable_on_failure
+    def list_books_for_export(
+        self, owner: str, book_ids: Collection[str] | None = None
+    ) -> list[dict[str, Any]]:
+        query: dict[str, Any] = {"owner_sub": owner}
+        if book_ids is not None:
+            oids = [_object_id(bid) for bid in book_ids]
+            valid_oids = [oid for oid in oids if oid is not None]
+            query["_id"] = {"$in": valid_oids}
+        with self._db()["books"].find(query) as cursor:
+            return [_public_book(doc) for doc in cursor]
 
     @_unavailable_on_failure
     def create_page(self, owner: str, book_id: str, page_id: str, key: str):

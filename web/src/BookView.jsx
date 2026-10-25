@@ -4,6 +4,7 @@ import BookCover from './BookCover.jsx';
 import PageCapture from './PageCapture.jsx';
 import QuoteReview from './QuoteReview.jsx';
 import {findCover} from './covers.js';
+import {exportBookQuotes} from './export.js';
 import './book-view.css';
 
 export default function BookView({book, coverUrl, getToken, onBack}) {
@@ -13,6 +14,8 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [exportError, setExportError] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const onSessionExpired = useCallback(() => setSessionExpired(true), []);
   useEffect(() => {heading.current?.focus();}, []);
 
@@ -56,6 +59,19 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
     };
   }, [book, coverUrl, getToken]);
 
+  async function handleExport() {
+    setExportError(null);
+    setExporting(true);
+    try {
+      await exportBookQuotes(getToken, book.id);
+    } catch (err) {
+      if (err?.status === 401) onSessionExpired();
+      else setExportError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const activeCover = coverUrl !== undefined ? coverUrl : localCover;
   const isPending = coverUrl === undefined && localCover === null && Boolean(book?.has_cover_photo);
 
@@ -77,6 +93,10 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
       <div>
         <h1 ref={heading} tabIndex={-1}>{book.title}</h1>
         <p className="book-author">{book.author || 'Author not provided'}</p>
+        <button type="button" className="quiet" onClick={handleExport} disabled={exporting} aria-busy={exporting || undefined}>
+          {exporting ? 'Exporting…' : 'Export quotes'}
+        </button>
+        {exportError ? <p className="quote-error" role="alert">{exportError}</p> : null}
       </div>
     </header>
     <PageCapture getToken={getToken} bookId={book.id} onSessionExpired={onSessionExpired} onUploadingChange={setUploading} />

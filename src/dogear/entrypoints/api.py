@@ -23,6 +23,7 @@ from dogear.adapters.mongo_books import BooksUnavailable, MongoBooks, MongoConfi
 from dogear.adapters.mongo_captures import MongoCaptures
 from dogear.adapters.r2_photos import R2Config, R2Photos
 from dogear.application.covers import cover_key, prepare_cover_photo
+from dogear.application.export import export_markdown
 from dogear.application.identify import MAX_BYTES, CoverError, identify_cover
 from dogear.application.pages import page_key, prepare_page_photo
 from dogear.ports.captures import CapturesUnavailable, CaptureStore
@@ -413,6 +414,70 @@ def create_app() -> FastAPI:
             if not captures.owns_book(subject, book_id):
                 raise HTTPException(404, "Book not found")
             return captures.list_pages(subject, book_id)
+        except CapturesUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+
+    @app.get(
+        "/quotes/export",
+        tags=["quotes"],
+        response_class=Response,
+        responses={
+            **CAPTURE_ERRORS,
+            200: {
+                "content": {"text/markdown": {}},
+                "headers": {
+                    "Content-Disposition": {
+                        "schema": {"type": "string"},
+                        "description": "Attachment filename",
+                    }
+                },
+            },
+        },
+    )
+    def export_quotes(
+        subject: Annotated[str, Depends(current_subject)],
+        captures: Annotated[CaptureStore, Depends(capture_store)],
+        book_id: str | None = None,
+    ):
+        """Export kept quotes as Markdown, for one book or the whole library."""
+        try:
+            if book_id is not None:
+                if not captures.owns_book(subject, book_id):
+                    raise HTTPException(404, "Book not found")
+                book = (
+                    captures.get_book(subject, book_id)
+                    if hasattr(captures, "get_book")
+                    else None
+                )
+                if book is None:
+                    book = {"id": book_id, "title": "Untitled book", "author": None}
+                quotes = captures.list_quotes(subject, book_id, "kept")
+                content = export_markdown([{"book": book, "quotes": quotes}])
+                filename = f"quotes-{book_id}.md"
+            else:
+                quotes = captures.list_quotes(subject, None, "kept")
+                book_ids = list(dict.fromkeys(q["book_id"] for q in quotes))
+                books_by_id = {}
+                if hasattr(captures, "list_books_for_export"):
+                    for b in captures.list_books_for_export(subject, book_ids):
+                        books_by_id[b["id"]] = b
+                book_quotes = []
+                for bid in book_ids:
+                    book = books_by_id.get(
+                        bid, {"id": bid, "title": "Untitled book", "author": None}
+                    )
+                    b_quotes = [q for q in quotes if q["book_id"] == bid]
+                    book_quotes.append({"book": book, "quotes": b_quotes})
+                content = export_markdown(book_quotes)
+                filename = "quotes.md"
+
+            return Response(
+                content=content,
+                media_type="text/markdown; charset=utf-8",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+            )
         except CapturesUnavailable:
             raise HTTPException(503, "Book storage unavailable") from None
 
