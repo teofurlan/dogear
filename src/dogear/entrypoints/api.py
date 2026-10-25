@@ -24,7 +24,7 @@ from dogear.adapters.mongo_captures import MongoCaptures
 from dogear.adapters.r2_photos import R2Config, R2Photos
 from dogear.application.books import delete_book as delete_book_with_contents
 from dogear.application.covers import cover_key, prepare_cover_photo
-from dogear.application.export import export_markdown
+from dogear.application.export import export_csv, export_markdown
 from dogear.application.identify import MAX_BYTES, CoverError, identify_cover
 from dogear.application.pages import page_key, prepare_page_photo
 from dogear.ports.captures import CapturesUnavailable, CaptureStore
@@ -491,7 +491,10 @@ def create_app() -> FastAPI:
         responses={
             **CAPTURE_ERRORS,
             200: {
-                "content": {"text/markdown": {}},
+                "content": {
+                    "text/markdown": {},
+                    "text/csv": {},
+                },
                 "headers": {
                     "Content-Disposition": {
                         "schema": {"type": "string"},
@@ -505,16 +508,17 @@ def create_app() -> FastAPI:
         subject: Annotated[str, Depends(current_subject)],
         captures: Annotated[CaptureStore, Depends(capture_store)],
         book_id: str | None = None,
+        format: Literal["markdown", "csv"] = "markdown",
     ):
-        """Export kept quotes as Markdown, for one book or the whole library."""
+        """Export kept quotes as Markdown or CSV, for one book or the whole library."""
         try:
             if book_id is not None:
                 if not captures.owns_book(subject, book_id):
                     raise HTTPException(404, "Book not found")
                 book = captures.get_book(subject, book_id)
                 quotes = captures.list_quotes(subject, book_id, "kept")
-                content = export_markdown([{"book": book, "quotes": quotes}])
-                filename = f"quotes-{book_id}.md"
+                book_quotes = [{"book": book, "quotes": quotes}]
+                base_name = f"quotes-{book_id}"
             else:
                 quotes = captures.list_quotes(subject, None, "kept")
                 book_ids = list(dict.fromkeys(q["book_id"] for q in quotes))
@@ -527,12 +531,20 @@ def create_app() -> FastAPI:
                     for bid in book_ids
                     if bid in books_by_id
                 ]
+                base_name = "quotes"
+
+            if format == "csv":
+                content = export_csv(book_quotes)
+                media_type = "text/csv; charset=utf-8"
+                filename = f"{base_name}.csv"
+            else:
                 content = export_markdown(book_quotes)
-                filename = "quotes.md"
+                media_type = "text/markdown; charset=utf-8"
+                filename = f"{base_name}.md"
 
             return Response(
                 content=content,
-                media_type="text/markdown; charset=utf-8",
+                media_type=media_type,
                 headers={
                     "Content-Disposition": f'attachment; filename="{filename}"',
                 },

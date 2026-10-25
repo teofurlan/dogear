@@ -7,6 +7,7 @@ import BookEntry from './BookEntry.jsx';
 import BookCover from './BookCover.jsx';
 import BookView from './BookView.jsx';
 import {listQuotes} from './quotes.js';
+import {exportAllQuotes} from './export.js';
 
 function ExampleGallery() {
   const [familiarBooks] = useState(() => chooseExampleBooks());
@@ -82,6 +83,22 @@ function Library({getToken, signIn}) {
   const [addedBooks, setAddedBooks] = useState([]);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(null);
+  const [exportError, setExportError] = useState(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  async function handleExport(format) {
+    setExportError(null);
+    setExporting(format);
+    try {
+      await exportAllQuotes(getToken, format);
+    } catch (err) {
+      if (err?.status === 401) setSessionExpired(true);
+      else setExportError('Export failed. Please try again.');
+    } finally {
+      setExporting(null);
+    }
+  }
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -242,7 +259,25 @@ function Library({getToken, signIn}) {
   if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} onChanged={replaceBook} onDeleted={removeBook} />;
 
   return <>
-    <div className="heading-row"><h1 ref={heading} tabIndex={-1}>Your library</h1>{status !== 'loading' && status !== 'error' ? <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span> : null}</div>
+    {sessionExpired ? <section className="feedback" role="status">
+      <p>Your session ended. Sign in again to continue.</p>
+      <button type="button" className="retry-button" onClick={signIn}>Sign in again</button>
+    </section> : null}
+    <div className="heading-row">
+      <h1 ref={heading} tabIndex={-1}>Your library</h1>
+      {status !== 'loading' && status !== 'error' ? <div className="heading-actions">
+        <span className="catalog-count">{visibleBooks.length} {visibleBooks.length === 1 ? 'book' : 'books'}{hasMore ? ' loaded' : ''}</span>
+        {visibleBooks.length > 0 ? <div className="export-actions" role="group" aria-label="Export quotes">
+          <button type="button" className="quiet" onClick={() => handleExport('markdown')} disabled={Boolean(exporting)} aria-busy={exporting === 'markdown' || undefined}>
+            {exporting === 'markdown' ? 'Exporting…' : 'Export Markdown'}
+          </button>
+          <button type="button" className="quiet" onClick={() => handleExport('csv')} disabled={Boolean(exporting)} aria-busy={exporting === 'csv' || undefined}>
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div> : null}
+      </div> : null}
+    </div>
+    {exportError ? <p className="quote-error" role="alert">{exportError}</p> : null}
     <p className="intro-copy">A shelf of books worth finding again.</p>
     {waiting.length ? <section className="review-banner" aria-label="Quotes to review">
       <p>{waiting.length} {waiting.length === 1 ? 'quote is' : 'quotes are'} waiting for review.</p>

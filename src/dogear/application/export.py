@@ -1,6 +1,19 @@
-"""Formatting kept quotes as Markdown export."""
+"""Formatting kept quotes as Markdown or CSV export."""
 
+import csv
+import io
 from typing import Any
+
+_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def sanitize_csv_cell(value: str | None) -> str:
+    """Neutralize spreadsheet formula injection by prefixing a single quote."""
+    if not value:
+        return ""
+    if value.startswith(_INJECTION_PREFIXES):
+        return f"'{value}"
+    return value
 
 
 def format_quote_markdown(text: str) -> str:
@@ -33,3 +46,37 @@ def export_markdown(book_quotes: list[dict[str, Any]]) -> str:
         sections.append(f"{header}\n\n{body}")
 
     return "\n\n".join(sections) + "\n"
+
+
+def export_csv(book_quotes: list[dict[str, Any]]) -> str:
+    """Format a list of {"book": {...}, "quotes": [...]} into CSV with UTF-8 BOM.
+
+    Header row is title,author,quote. Books are sorted by title order, matching
+    Markdown export. Quotes are rendered in their stored order. Pending quotes
+    are excluded.
+    """
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output, lineterminator="\r\n")
+    writer.writerow(["title", "author", "quote"])
+
+    entries = []
+    for bq in book_quotes:
+        kept_quotes = [q for q in bq.get("quotes", []) if q.get("status") != "pending"]
+        if kept_quotes:
+            entries.append({"book": bq["book"], "quotes": kept_quotes})
+
+    sorted_books = sorted(
+        entries,
+        key=lambda bq: bq["book"]["title"].lower() if bq["book"].get("title") else "",
+    )
+
+    for entry in sorted_books:
+        book = entry["book"]
+        title = sanitize_csv_cell(book.get("title"))
+        author = sanitize_csv_cell(book.get("author"))
+        for quote in entry["quotes"]:
+            quote_text = sanitize_csv_cell(quote.get("text"))
+            writer.writerow([title, author, quote_text])
+
+    return output.getvalue()

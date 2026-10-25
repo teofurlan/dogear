@@ -16,7 +16,7 @@ export default function BookView({book, coverUrl, getToken, onBack, onChanged = 
   const [uploading, setUploading] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [exportError, setExportError] = useState(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState(null);
   const onSessionExpired = useCallback(() => setSessionExpired(true), []);
   useEffect(() => {heading.current?.focus();}, []);
 
@@ -60,16 +60,16 @@ export default function BookView({book, coverUrl, getToken, onBack, onChanged = 
     };
   }, [book, coverUrl, getToken]);
 
-  async function handleExport() {
+  async function handleExport(format) {
     setExportError(null);
-    setExporting(true);
+    setExporting(format);
     try {
-      await exportBookQuotes(getToken, book.id);
+      await exportBookQuotes(getToken, book.id, format);
     } catch (err) {
       if (err?.status === 401) onSessionExpired();
       else setExportError('Export failed. Please try again.');
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -94,9 +94,14 @@ export default function BookView({book, coverUrl, getToken, onBack, onChanged = 
       <div>
         <h1 ref={heading} tabIndex={-1}>{book.title}</h1>
         <p className="book-author">{book.author || 'Author not provided'}</p>
-        <button type="button" className="quiet" onClick={handleExport} disabled={exporting} aria-busy={exporting || undefined}>
-          {exporting ? 'Exporting…' : 'Export quotes'}
-        </button>
+        <div className="export-actions" role="group" aria-label="Export quotes">
+          <button type="button" className="quiet" onClick={() => handleExport('markdown')} disabled={Boolean(exporting)} aria-busy={exporting === 'markdown' || undefined}>
+            {exporting === 'markdown' ? 'Exporting…' : 'Export Markdown'}
+          </button>
+          <button type="button" className="quiet" onClick={() => handleExport('csv')} disabled={Boolean(exporting)} aria-busy={exporting === 'csv' || undefined}>
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
         {exportError ? <p className="quote-error" role="alert">{exportError}</p> : null}
         <BookActions book={book} getToken={getToken} uploading={uploading} onSessionExpired={onSessionExpired} onChanged={onChanged} onDeleted={onDeleted} />
       </div>

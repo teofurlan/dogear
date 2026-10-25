@@ -90,3 +90,44 @@ def test_export_all_books_skips_quotes_with_missing_book(export_client):
     assert "# Book One" in res.text
     assert "Quote for deleted book" not in res.text
     assert "Untitled book" not in res.text
+
+
+def test_export_invalid_format_returns_422(export_client):
+    client, headers, _ = export_client
+    res = client.get("/quotes/export?format=invalid", headers=headers(ALICE))
+    assert res.status_code == 422
+
+    res_book = client.get(f"/quotes/export?book_id={BOOK_1}&format=json", headers=headers(ALICE))
+    assert res_book.status_code == 422
+
+
+def test_export_single_book_csv(export_client):
+    client, headers, captures = export_client
+    captures.add_quote(ALICE, BOOK_1, "First kept quote")
+    captures._insert_quote(ALICE, BOOK_1, None, "Pending quote", "Pending quote", [], "pending", None)
+
+    res = client.get(f"/quotes/export?book_id={BOOK_1}&format=csv", headers=headers(ALICE))
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "text/csv; charset=utf-8"
+    assert f'filename="quotes-{BOOK_1}.csv"' in res.headers["content-disposition"]
+    assert res.text.startswith("\ufeff")
+    assert "title,author,quote" in res.text
+    assert "Book One,Alice Author,First kept quote" in res.text
+    assert "Pending quote" not in res.text
+
+
+def test_export_all_books_csv_with_owner_scoping(export_client):
+    client, headers, captures = export_client
+    captures.add_quote(ALICE, BOOK_1, "Quote from book 1")
+    captures.add_quote(ALICE, BOOK_2, "Quote from book 2")
+    captures.add_quote(BOB, BOOK_1, "Bob quote")  # foreign owner
+
+    res = client.get("/quotes/export?format=csv", headers=headers(ALICE))
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "text/csv; charset=utf-8"
+    assert 'filename="quotes.csv"' in res.headers["content-disposition"]
+    assert res.text.startswith("\ufeff")
+    assert "Book One,Alice Author,Quote from book 1" in res.text
+    assert "Book Two,,Quote from book 2" in res.text
+    assert "Bob quote" not in res.text
+
