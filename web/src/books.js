@@ -1,3 +1,5 @@
+import {anySignal} from './signals.js';
+
 export const PAGE_SIZE = 24;
 
 export class BooksError extends Error {
@@ -11,7 +13,7 @@ export async function listBooks(getToken, {after, signal} = {}) {
   if (after) query.set('after', after);
   const response = await fetch('/api/books?' + query, {
     headers: {Authorization: `Bearer ${token}`}, credentials: 'omit',
-    signal: AbortSignal.any([signal, AbortSignal.timeout(8000)].filter(Boolean))
+    signal: anySignal([signal, AbortSignal.timeout(8000)].filter(Boolean))
   });
   if (!response.ok) throw new BooksError(response.status);
   const books = await response.json();

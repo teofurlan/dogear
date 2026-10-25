@@ -21,3 +21,12 @@ test('unauthorized, unavailable and malformed replies are not accepted as librar
   fetch.mockResolvedValue({ok:true,json:async()=>[{...book,title:null}]});
   await expect(listBooks(async () => 'token')).rejects.toThrow();
 });
+
+test('requests work on browsers without AbortSignal.any (iOS Safari before 17.4)', async () => {
+  vi.stubGlobal('AbortSignal', {timeout: AbortSignal.timeout.bind(AbortSignal)});
+  const fetch = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({id: '000000000000000000000001', title: 'T', author: null})});
+  vi.stubGlobal('fetch', fetch);
+  await listBooks(async () => 'tok').catch(() => {});
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+});
