@@ -101,3 +101,20 @@ test('pages already read by the night run are not reported as no pages', async (
   expect(await screen.findByText('All 2 photographed pages have been read. Their quotes are in the review below.')).toBeInTheDocument();
   expect(screen.queryByText(/No pages yet/)).toBeNull();
 });
+
+test('a 401 during upload notifies onSessionExpired and halts further uploads', async () => {
+  const onSessionExpired = vi.fn();
+  uploadPage.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<PageCapture getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
+  await userEvent.upload(screen.getByLabelText(/Photograph a page/), [file('a.jpg'), file('b.jpg')]);
+  expect(await screen.findByText(/a\.jpg: Your session ended\. Sign in again before uploading\./)).toBeInTheDocument();
+  expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  expect(uploadPage).toHaveBeenCalledTimes(1);
+});
+
+test('a 401 when fetching page list notifies onSessionExpired', async () => {
+  const onSessionExpired = vi.fn();
+  listPages.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<PageCapture getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
+  await waitFor(() => expect(onSessionExpired).toHaveBeenCalledTimes(1));
+});

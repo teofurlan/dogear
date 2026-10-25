@@ -20,7 +20,7 @@ function status(waiting, read) {
   return 'No pages yet. Photograph a page you highlighted.';
 }
 
-export default function PageCapture({getToken, bookId}) {
+export default function PageCapture({getToken, bookId, onSessionExpired}) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(null);
@@ -34,8 +34,10 @@ export default function PageCapture({getToken, bookId}) {
       if (!alive.current || !Array.isArray(pages)) return;
       setWaiting(pages.filter(page => page.status === 'pending' || page.status === 'processing').length);
       setRead(pages.filter(page => page.status === 'processed').length);
-    } catch { /* the count is a hint; uploads still work without it */ }
-  }, [getToken, bookId]);
+    } catch (problem) {
+      if (problem?.status === 401) onSessionExpired?.();
+    }
+  }, [getToken, bookId, onSessionExpired]);
 
   useEffect(() => {
     alive.current = true;
@@ -63,7 +65,10 @@ export default function PageCapture({getToken, bookId}) {
         patch(index, 'done');
       } catch (problem) {
         patch(index, 'error', failure(problem));
-        if (problem?.status === 401) break;
+        if (problem?.status === 401) {
+          onSessionExpired?.();
+          break;
+        }
       }
     }
     running.current = false;

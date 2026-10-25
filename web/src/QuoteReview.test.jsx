@@ -253,3 +253,60 @@ test('only the action that is running is marked busy', async () => {
   await userEvent.click(add);
   expect(add).toHaveAttribute('aria-busy', 'true');
 });
+
+test('a 401 on initial quote load calls onSessionExpired', async () => {
+  const onSessionExpired = vi.fn();
+  listQuotes.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<QuoteReview getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Your quotes could not load. Reload the page to try again.');
+  expect(onSessionExpired).toHaveBeenCalledTimes(1);
+});
+
+test('a 401 on keep calls onSessionExpired and keeps the unsaved text in the textarea', async () => {
+  const onSessionExpired = vi.fn();
+  pending = [quote({id: 'q1', text: 'Important passage'})];
+  updateQuote.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<QuoteReview getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
+  const textarea = await screen.findByLabelText('Quote text');
+  await userEvent.clear(textarea);
+  await userEvent.type(textarea, 'Edited passage');
+  await userEvent.click(screen.getByRole('button', {name: 'Keep'}));
+  expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  expect(textarea).toHaveValue('Edited passage');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('a 401 on save edited kept quote calls onSessionExpired and keeps the edited text', async () => {
+  const onSessionExpired = vi.fn();
+  kept = [quote({id: 'k1', status: 'kept', text: 'Original kept text'})];
+  updateQuote.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<QuoteReview getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
+  await userEvent.click(await screen.findByRole('button', {name: 'Edit quote'}));
+  const textarea = screen.getByLabelText('Edit quote text');
+  await userEvent.clear(textarea);
+  await userEvent.type(textarea, 'Unsaved modification');
+  await userEvent.click(screen.getByRole('button', {name: 'Save'}));
+  expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  expect(textarea).toHaveValue('Unsaved modification');
+});
+
+test('a 401 on add passage calls onSessionExpired and preserves the draft text', async () => {
+  const onSessionExpired = vi.fn();
+  addQuote.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<QuoteReview getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
+  const input = await screen.findByLabelText('Add a passage you highlighted');
+  await userEvent.type(input, 'My precious new passage');
+  await userEvent.click(screen.getByRole('button', {name: 'Add passage'}));
+  expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  expect(input).toHaveValue('My precious new passage');
+});
+
+test('a 401 on delete calls onSessionExpired and restores the quote', async () => {
+  const onSessionExpired = vi.fn();
+  pending = [quote({id: 'q1', text: 'Passage to delete'})];
+  deleteQuote.mockRejectedValueOnce(Object.assign(new Error('unauthorized'), {status: 401}));
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={250} onSessionExpired={onSessionExpired} />);
+  await userEvent.click(await screen.findByRole('button', {name: 'Delete'}));
+  await waitFor(() => expect(onSessionExpired).toHaveBeenCalledTimes(1));
+  expect(screen.getByDisplayValue('Passage to delete')).toBeInTheDocument();
+});

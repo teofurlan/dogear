@@ -35,14 +35,20 @@ function Crop({getToken, quote}) {
   return url ? <img className="quote-crop" src={url} alt="Photo of the highlighted passage" /> : null;
 }
 
-function PendingQuote({getToken, quote, onKept, onDeleted}) {
+function PendingQuote({getToken, quote, onKept, onDeleted, onSessionExpired}) {
   const [text, setText] = useState(quote.text);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const hint = flagHint(quote.flags);
   async function run(action) {
     setBusy(true); setError('');
-    try {await action();} catch {setError(SAVE_FAILED); setBusy(false);}
+    try {
+      await action();
+    } catch (problem) {
+      if (problem?.status === 401) onSessionExpired?.();
+      else setError(SAVE_FAILED);
+      setBusy(false);
+    }
   }
   return <li className="quote-card">
     <Crop getToken={getToken} quote={quote} />
@@ -57,14 +63,21 @@ function PendingQuote({getToken, quote, onKept, onDeleted}) {
   </li>;
 }
 
-function KeptQuote({getToken, quote, onChanged, onDeleted}) {
+function KeptQuote({getToken, quote, onChanged, onDeleted, onSessionExpired}) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(quote.text);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function run(action) {
     setBusy(true); setError('');
-    try {await action();} catch {setError(SAVE_FAILED);} finally {setBusy(false);}
+    try {
+      await action();
+    } catch (problem) {
+      if (problem?.status === 401) onSessionExpired?.();
+      else setError(SAVE_FAILED);
+    } finally {
+      setBusy(false);
+    }
   }
   const save = () => run(async () => {onChanged(await updateQuote(getToken, quote.id, {text: text.trim()})); setEditing(false);});
   return <li className="quote-card kept">
@@ -83,7 +96,7 @@ function KeptQuote({getToken, quote, onChanged, onDeleted}) {
   </li>;
 }
 
-export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOUT}) {
+export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOUT, onSessionExpired}) {
   const [pending, setPending] = useState(null);
   const [kept, setKept] = useState(null);
   const [loadError, setLoadError] = useState(false);
@@ -101,13 +114,14 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
   useEffect(() => { bookIdRef.current = bookId; }, [bookId]);
 
   const performDelete = useCallback(target => {
-    deleteQuote(getTokenRef.current, target.quote.id).catch(() => {
+    deleteQuote(getTokenRef.current, target.quote.id).catch(problem => {
       if (!mounted.current || target.bookId !== bookIdRef.current) return;
       if (target.isPending) setPending(items => restoreAt(items, target.quote, target.index));
       else setKept(items => restoreAt(items, target.quote, target.index));
-      setDeleteError(DELETE_FAILED);
+      if (problem?.status === 401) onSessionExpired?.();
+      else setDeleteError(DELETE_FAILED);
     });
-  }, []);
+  }, [onSessionExpired]);
 
   const flushDelete = useCallback(() => {
     if (!pendingDelete.current) return;
@@ -141,9 +155,14 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
     ]).then(([waiting, saved]) => {
       if (controller.signal.aborted) return;
       setPending(waiting); setKept(saved);
-    }).catch(() => {if (!controller.signal.aborted) {setLoadError(true); setPending([]); setKept([]);}});
+    }).catch(problem => {
+      if (!controller.signal.aborted) {
+        if (problem?.status === 401) onSessionExpired?.();
+        setLoadError(true); setPending([]); setKept([]);
+      }
+    });
     return () => controller.abort();
-  }, [getToken, bookId, flushDelete, retryCount]);
+  }, [getToken, bookId, flushDelete, retryCount, onSessionExpired]);
 
   const drop = useCallback(quote => {
     flushDelete();
@@ -186,7 +205,10 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
     try {
       const quote = await addQuote(getToken, bookId, text);
       setKept(list => [quote, ...(list || [])]); setDraft('');
-    } catch {setAddError('The passage could not be saved. Your text is still here; try again.');} finally {setAdding(false);}
+    } catch (problem) {
+      if (problem?.status === 401) onSessionExpired?.();
+      else setAddError('The passage could not be saved. Your text is still here; try again.');
+    } finally {setAdding(false);}
   }
 
   const loading = pending === null || kept === null;
@@ -198,10 +220,10 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
       <button type="button" className="retry-button" onClick={() => setRetryCount(count => count + 1)}>Try again</button>
     </> : null}
     {loading ? <p role="status" className="feedback">Loading quotes…</p> : !loadError ? <>
-      {pending.length ? <ul className="quote-list" aria-label="Quotes to review">{pending.map(quote => <PendingQuote key={quote.id} getToken={getToken} quote={quote} onKept={keep} onDeleted={drop} />)}</ul>
+      {pending.length ? <ul className="quote-list" aria-label="Quotes to review">{pending.map(quote => <PendingQuote key={quote.id} getToken={getToken} quote={quote} onKept={keep} onDeleted={drop} onSessionExpired={onSessionExpired} />)}</ul>
         : <p className="empty-note">Tonight's run will find your highlights</p>}
       <h3>Kept quotes</h3>
-      {kept.length ? <ul className="quote-list" aria-label="Kept quotes">{kept.map(quote => <KeptQuote key={quote.id} getToken={getToken} quote={quote} onChanged={replace} onDeleted={drop} />)}</ul>
+      {kept.length ? <ul className="quote-list" aria-label="Kept quotes">{kept.map(quote => <KeptQuote key={quote.id} getToken={getToken} quote={quote} onChanged={replace} onDeleted={drop} onSessionExpired={onSessionExpired} />)}</ul>
         : <p className="empty-note">No kept quotes yet.</p>}
     </> : null}
     <form className="add-passage" onSubmit={add}>
