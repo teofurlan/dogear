@@ -11,17 +11,28 @@ const MESSAGES = {
 };
 const failure = problem => MESSAGES[problem?.status] || 'The upload failed. Check your connection and try again.';
 
+function status(waiting, read) {
+  if (waiting === null) return '';
+  if (waiting > 0) return `${waiting} ${waiting === 1 ? 'page' : 'pages'} waiting for tonight's run`;
+  if (read > 0) return read === 1 ? 'Your photographed page has been read. Its quotes are in the review below.'
+    : `All ${read} photographed pages have been read. Their quotes are in the review below.`;
+  return 'No pages yet. Photograph a page you highlighted.';
+}
+
 export default function PageCapture({getToken, bookId}) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(null);
+  const [read, setRead] = useState(0);
   const alive = useRef(true);
   const running = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const pages = await listPages(getToken, bookId);
-      if (alive.current && Array.isArray(pages)) setWaiting(pages.filter(page => page.status === 'pending' || page.status === 'processing').length);
+      if (!alive.current || !Array.isArray(pages)) return;
+      setWaiting(pages.filter(page => page.status === 'pending' || page.status === 'processing').length);
+      setRead(pages.filter(page => page.status === 'processed').length);
     } catch { /* the count is a hint; uploads still work without it */ }
   }, [getToken, bookId]);
 
@@ -63,6 +74,6 @@ export default function PageCapture({getToken, bookId}) {
       <span>Tap to open your camera or choose photos. Photos are read tonight, then deleted.</span>
     </label>
     {items.length ? <ul className="upload-list" aria-label="Upload progress">{items.map((item, index) => <li key={index} className={item.state === 'error' ? 'is-error' : ''} role={item.state === 'error' ? 'alert' : undefined}>{line(item)}</li>)}</ul> : null}
-    <p className="capture-status" role="status">{waiting === null ? '' : waiting > 0 ? `${waiting} ${waiting === 1 ? 'page' : 'pages'} waiting for tonight's run` : items.length || waiting === 0 ? 'No pages yet. Photograph a page you highlighted.' : ''}</p>
+    <p className="capture-status" role="status">{status(waiting, read)}</p>
   </section>;
 }

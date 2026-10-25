@@ -1,3 +1,5 @@
+import {anySignal} from './signals.js';
+
 const normalize = text => String(text || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 let queue = Promise.resolve();
 let nextRequestAt = 0;
@@ -12,7 +14,7 @@ export async function findCover(book, signal) {
     if (book.author) query.set('author', book.author);
     const response = await fetch('https://openlibrary.org/search.json?' + query, {
       credentials: 'omit', referrerPolicy: 'no-referrer',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(4000)].filter(Boolean))
+      signal: anySignal([signal, AbortSignal.timeout(4000)].filter(Boolean))
     });
     if (!response.ok) return null;
     const data = await response.json();

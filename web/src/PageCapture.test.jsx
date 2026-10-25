@@ -78,3 +78,10 @@ test('the waiting count refreshes after an upload', async () => {
   await userEvent.upload(screen.getByLabelText(/Photograph a page/), file('a.jpg'));
   expect(await screen.findByText("1 page waiting for tonight's run")).toBeInTheDocument();
 });
+
+test('pages already read by the night run are not reported as no pages', async () => {
+  listPages.mockResolvedValue([{status: 'processed'}, {status: 'processed'}]);
+  render(<PageCapture getToken={getToken} bookId={id} />);
+  expect(await screen.findByText('All 2 photographed pages have been read. Their quotes are in the review below.')).toBeInTheDocument();
+  expect(screen.queryByText(/No pages yet/)).toBeNull();
+});
