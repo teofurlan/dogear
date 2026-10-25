@@ -37,6 +37,8 @@ an Auth0 **API access token** (not an ID token).
 | `POST /books` | `{"title":"A quiet morning","author":"Ada Reed"}` | `201`, with `id`, `title`, `author` |
 | `GET /books` | Optional `limit`, `after`, and `q` query parameters | `200`, an array containing only your books |
 | `GET /books/{book_id}` | | `200`, the book payload (including `has_cover_photo`); `404` when nonexistent or owned by another reader |
+| `PATCH /books/{book_id}` | `{"title":"...","author":"..."}`, same rules as `POST /books` | `200`, the updated book; leaving `author` out clears it; `404` for an unknown or other-owner book |
+| `DELETE /books/{book_id}` | | `204`; also deletes its quotes (with crops), pages and stored photos; `404` for an unknown or other-owner book; `503` when book or photo storage is unavailable |
 | `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"..."}`; creates nothing |
 | `PUT /books/{book_id}/cover` | Raw `image/jpeg` or `image/png` cover photo | `200`, the book with `has_cover_photo: true`; `404` for an unknown or other-owner book; `503` when storage is unavailable |
 | `GET /books/{book_id}/cover` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` without a stored photo |
@@ -48,7 +50,10 @@ an Auth0 **API access token** (not an ID token).
   array ends the traversal. An optional `q` query parameter filters books whose title or author
   matches the query string, case- and accent-insensitively, while preserving `limit` and `after`
   pagination. This is not a snapshot across concurrent inserts.
-- There is no edit or delete for books yet.
+- Deleting removes the photos first (waiting page photos and the cover photo), then the book,
+  its pages and its quotes. If photo storage fails the request answers `503` and nothing is
+  removed, so it can be retried; it therefore needs R2 configured. A night run that was reading
+  one of the book's pages discards what it found once it sees the book is gone.
 
 Book payloads include `has_cover_photo` (`true` once a cover photo is stored). Book creation
 never depends on the photo: the web app sends it with `PUT /books/{book_id}/cover` after the book

@@ -22,6 +22,7 @@ from dogear.adapters.auth0_jwt import (
 from dogear.adapters.mongo_books import BooksUnavailable, MongoBooks, MongoConfig
 from dogear.adapters.mongo_captures import MongoCaptures
 from dogear.adapters.r2_photos import R2Config, R2Photos
+from dogear.application.books import delete_book as delete_book_with_contents
 from dogear.application.covers import cover_key, prepare_cover_photo
 from dogear.application.export import export_markdown
 from dogear.application.identify import MAX_BYTES, CoverError, identify_cover
@@ -293,6 +294,51 @@ def create_app() -> FastAPI:
         if book is None:
             raise HTTPException(404, "Book not found")
         return book
+
+    @app.patch(
+        "/books/{book_id}",
+        response_model=Book,
+        tags=["books"],
+        responses={**BOOK_ERRORS, 404: {"description": "Unknown book"}},
+    )
+    def edit_book(
+        book_id: str,
+        book: BookInput,
+        subject: Annotated[str, Depends(current_subject)],
+        books: Annotated[MongoBooks, Depends(book_store)],
+    ):
+        """Replace an own book's title and author; leaving author out clears it."""
+        try:
+            updated = books.update(subject, book_id, book.title, book.author)
+        except BooksUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+        if updated is None:
+            raise HTTPException(404, "Book not found")
+        return updated
+
+    @app.delete(
+        "/books/{book_id}",
+        status_code=204,
+        response_class=Response,
+        tags=["books"],
+        responses={**BOOK_ERRORS, 404: {"description": "Unknown book"}},
+    )
+    def delete_book(
+        book_id: str,
+        subject: Annotated[str, Depends(current_subject)],
+        captures: Annotated[CaptureStore, Depends(capture_store)],
+        photos: Annotated[PhotoStore, Depends(photo_store)],
+    ):
+        """Delete an own book with its quotes, pages and photos."""
+        try:
+            deleted = delete_book_with_contents(captures, photos, subject, book_id)
+        except CapturesUnavailable:
+            raise HTTPException(503, "Book storage unavailable") from None
+        except PhotosUnavailable:
+            raise HTTPException(503, "Photo storage unavailable") from None
+        if not deleted:
+            raise HTTPException(404, "Book not found")
+        return Response(status_code=204)
 
     @app.put(
         "/books/{book_id}/cover",

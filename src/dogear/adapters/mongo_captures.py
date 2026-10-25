@@ -193,6 +193,23 @@ class MongoCaptures:
         document["_id"] = self._db()["quotes"].insert_one(document).inserted_id
         return _public_quote(document)
 
+    @_unavailable_on_failure
+    def delete_book(self, owner: str, book_id: str) -> list[str] | None:
+        oid = _object_id(book_id)
+        if oid is None:
+            return None
+        db = self._db()
+        # The book goes first, so a night run inserting quotes afterwards sees it gone.
+        if db["books"].delete_one({"_id": oid, "owner_sub": owner}).deleted_count != 1:
+            return None
+        query = {"owner": owner, "book_id": book_id}
+        unprocessed = {**query, "status": {"$nin": ["processed"]}}
+        with db["pages"].find(unprocessed) as cursor:
+            keys = [page["key"] for page in cursor]
+        db["pages"].delete_many(query)
+        db["quotes"].delete_many(query)
+        return keys
+
     @staticmethod
     def _quote_document(
         owner, book_id, page_id, text, ocr_text, flags, status, crop, now
@@ -265,6 +282,11 @@ class MongoCaptures:
         ]
         if documents:
             collection.insert_many(documents)
+        book = {"_id": _object_id(page["book_id"]), "owner_sub": page["owner"]}
+        if self._db()["books"].find_one(book) is None:
+            # Deleted while this page was read: take back what was just inserted.
+            collection.delete_many({"page_id": page["id"]})
+            self._db()["pages"].delete_one({"_id": page["id"]})
 
     @_unavailable_on_failure
     def finish_page(self, page_id: str, now: datetime) -> None:
