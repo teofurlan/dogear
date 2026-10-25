@@ -39,6 +39,8 @@ beforeEach(() => {
     cb(new Blob(['fake-jpg'], {type: type || 'image/jpeg'}));
   });
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(window.HTMLVideoElement.prototype, 'videoWidth', {configurable: true, get: () => 1920});
+  Object.defineProperty(window.HTMLVideoElement.prototype, 'videoHeight', {configurable: true, get: () => 1080});
   globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
   globalThis.URL.revokeObjectURL = vi.fn();
 });

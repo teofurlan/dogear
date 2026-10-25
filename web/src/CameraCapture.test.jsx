@@ -38,6 +38,8 @@ describe('CameraCapture', () => {
     });
 
     window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.HTMLVideoElement.prototype, 'videoWidth', {configurable: true, get: () => 1920});
+    Object.defineProperty(window.HTMLVideoElement.prototype, 'videoHeight', {configurable: true, get: () => 1080});
 
     originalCreateObjectURL = globalThis.URL.createObjectURL;
     originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
@@ -138,6 +140,39 @@ describe('CameraCapture', () => {
 
     await waitFor(() => expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText('Take photo')).toBeInTheDocument();
+    expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-preview-url');
+  });
+
+  test('a flip while the first camera is still starting leaves no stream running', async () => {
+    const first = {getTracks: vi.fn(() => [firstTrack])};
+    const firstTrack = {kind: 'video', stop: vi.fn()};
+    let resolveFirst;
+    navigator.mediaDevices.getUserMedia
+      .mockReturnValueOnce(new Promise(resolve => {resolveFirst = resolve;}))
+      .mockResolvedValueOnce(mockStream);
+    render(<CameraCapture onCapture={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Flip camera'));
+    await waitFor(() => expect(screen.getByLabelText('Take photo')).toBeEnabled());
+    resolveFirst(first);
+    await waitFor(() => expect(firstTrack.stop).toHaveBeenCalled());
+    expect(mockTrack.stop).not.toHaveBeenCalled();
+  });
+
+  test('the shutter waits for decoded frames', async () => {
+    Object.defineProperty(window.HTMLVideoElement.prototype, 'videoWidth', {configurable: true, get: () => 0});
+    render(<CameraCapture onCapture={vi.fn()} onClose={vi.fn()} />);
+    await waitFor(() => expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled());
+    expect(screen.getByLabelText('Take photo')).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Take photo'));
+    expect(HTMLCanvasElement.prototype.toBlob).not.toHaveBeenCalled();
+  });
+
+  test('unmounting during review revokes the preview URL', async () => {
+    const {unmount} = render(<CameraCapture onCapture={vi.fn()} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Take photo')).toBeEnabled());
+    fireEvent.click(screen.getByLabelText('Take photo'));
+    await screen.findByRole('button', {name: 'Use photo'});
+    unmount();
     expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-preview-url');
   });
 

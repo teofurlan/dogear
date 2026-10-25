@@ -36,6 +36,8 @@ beforeEach(() => {
     cb(new Blob(['fake-jpg'], {type: type || 'image/jpeg'}));
   });
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(window.HTMLVideoElement.prototype, 'videoWidth', {configurable: true, get: () => 1920});
+  Object.defineProperty(window.HTMLVideoElement.prototype, 'videoHeight', {configurable: true, get: () => 1080});
   globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
   globalThis.URL.revokeObjectURL = vi.fn();
 });
@@ -243,4 +245,14 @@ test('save is marked busy only while the book is being saved', async () => {
   fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'Synthetic book'}});
   fireEvent.click(save);
   expect(await screen.findByRole('button', {name: 'Saving book…'})).toHaveAttribute('aria-busy', 'true');
+});
+
+test('a photo dropped while a cover is being read is ignored', async () => {
+  identifyBook.mockReturnValue(new Promise(() => {}));
+  render(<BookEntry getToken={vi.fn()} onCreated={vi.fn()} />); open();
+  fireEvent.change(screen.getByLabelText('Cover photo'), {target: {files: [new File(['a'], 'a.jpg', {type: 'image/jpeg'})]}});
+  expect(await screen.findByText(/Reading cover/)).toBeInTheDocument();
+  const dropTarget = screen.getByRole('group', {name: 'Cover photo options'}).querySelector('.cover-dropzone');
+  fireEvent.drop(dropTarget, {dataTransfer: {files: [new File(['b'], 'b.png', {type: 'image/png'})]}});
+  expect(identifyBook).toHaveBeenCalledTimes(1);
 });

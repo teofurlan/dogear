@@ -4,13 +4,17 @@ import './camera.css';
 export default function CameraCapture({onCapture, onClose, onError, guide = 'cover'}) {
   const [facingMode, setFacingMode] = useState('environment');
   const [photo, setPhoto] = useState(null);
+  const [ready, setReady] = useState(false);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const shutterRef = useRef(null);
   const usePhotoRef = useRef(null);
   const mountedRef = useRef(true);
+  const startRef = useRef(0);  // only the latest start may keep its stream
+  const photoUrlRef = useRef(null);
 
   const stopStream = useCallback(() => {
+    setReady(false);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -21,13 +25,15 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
   }, []);
 
   const cleanupPhoto = useCallback(() => {
-    if (photo?.url) {
-      URL.revokeObjectURL(photo.url);
+    if (photoUrlRef.current) {
+      URL.revokeObjectURL(photoUrlRef.current);
+      photoUrlRef.current = null;
     }
     setPhoto(null);
-  }, [photo]);
+  }, []);
 
   const startCamera = useCallback(async (mode) => {
+    const start = ++startRef.current;
     stopStream();
     if (!navigator.mediaDevices?.getUserMedia || (typeof window !== 'undefined' && window.isSecureContext === false)) {
       onError?.('Camera is not available on this device. Choose a photo from the gallery instead.');
@@ -44,7 +50,7 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
         audio: false
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      if (!mountedRef.current) {
+      if (!mountedRef.current || start !== startRef.current) {
         stream.getTracks().forEach(track => track.stop());
         return;
       }
@@ -56,9 +62,10 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
         } catch {
           // Playback might be interrupted or handled by autoPlay
         }
+        if (start === startRef.current && videoRef.current?.videoWidth) setReady(true);
       }
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || start !== startRef.current) return;
       const isDenied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
       const message = isDenied
         ? 'Camera permission was denied. Choose a photo from the gallery instead.'
@@ -74,9 +81,7 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
     return () => {
       mountedRef.current = false;
       stopStream();
-      if (photo?.url) {
-        URL.revokeObjectURL(photo.url);
-      }
+      if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current);
     };
   }, []);
 
@@ -109,9 +114,8 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
 
   function takePhoto() {
     const video = videoRef.current;
-    if (!video) return;
-    const width = video.videoWidth || 1920;
-    const height = video.videoHeight || 1080;
+    if (!video?.videoWidth || !video.videoHeight) return;  // no decoded frame yet
+    const {videoWidth: width, videoHeight: height} = video;
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -123,6 +127,7 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
       if (!mountedRef.current || !blob) return;
       stopStream();
       const url = URL.createObjectURL(blob);
+      photoUrlRef.current = url;
       setPhoto({blob, url});
     };
     if (typeof canvas.toBlob === 'function') {
@@ -161,7 +166,8 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
           <img src={photo.url} alt="Captured preview" className="camera-preview-image" />
         ) : (
           <>
-            <video ref={videoRef} autoPlay playsInline muted className="camera-video" aria-label="Live camera preview" />
+            <video ref={videoRef} autoPlay playsInline muted className="camera-video" aria-label="Live camera preview"
+              onLoadedMetadata={() => setReady(Boolean(videoRef.current?.videoWidth && streamRef.current))} />
             <div className={`camera-guide camera-guide-${guide}`} aria-hidden="true">
               <div className="camera-guide-box" />
             </div>
@@ -175,7 +181,7 @@ export default function CameraCapture({onCapture, onClose, onError, guide = 'cov
             <button ref={usePhotoRef} type="button" className="camera-btn-use" onClick={usePhoto}>Use photo</button>
           </div>
         ) : (
-          <button ref={shutterRef} type="button" className="camera-shutter-button" aria-label="Take photo" onClick={takePhoto}>
+          <button ref={shutterRef} type="button" className="camera-shutter-button" aria-label="Take photo" onClick={takePhoto} disabled={!ready}>
             Take photo
           </button>
         )}

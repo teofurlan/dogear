@@ -91,10 +91,10 @@ export default function BookEntry({getToken, onCreated}) {
           Take cover photo
         </button>
         <div className={`cover-dropzone${dragOver ? ' is-drag-over' : ''}`}
-          onDragEnter={event => {event.preventDefault(); if (!saving.current) setDragOver(true);}}
-          onDragOver={event => {event.preventDefault(); if (!saving.current) setDragOver(true);}}
+          onDragEnter={event => {event.preventDefault(); if (status === 'idle') setDragOver(true);}}
+          onDragOver={event => {event.preventDefault(); if (status === 'idle') setDragOver(true);}}
           onDragLeave={event => {event.preventDefault(); setDragOver(false);}}
-          onDrop={event => {event.preventDefault(); setDragOver(false); if (!saving.current) read(event.dataTransfer.files?.[0]);}}>
+          onDrop={event => {event.preventDefault(); setDragOver(false); if (status === 'idle') read(event.dataTransfer.files?.[0]);}}>
           <input id="cover-photo" type="file" accept="image/jpeg,image/png" disabled={status !== 'idle'} onChange={event => {read(event.target.files?.[0]); event.target.value = '';}} aria-describedby="cover-help" />
           <span className="cover-dropzone-copy"><strong>Choose from gallery</strong><span>or drop a photo here</span></span>
         </div>
