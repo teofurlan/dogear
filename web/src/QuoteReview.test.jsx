@@ -218,6 +218,24 @@ test('a failed save keeps the quote and says so', async () => {
   expect(screen.getByLabelText('Quote text')).toBeInTheDocument();
 });
 
+test('a load failure shows error and retry button without empty states, and Try again retries', async () => {
+  listQuotes.mockRejectedValueOnce(new Error('Load failed'));
+  render(<QuoteReview getToken={getToken} bookId={id} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Your quotes could not load. Reload the page to try again.');
+  expect(screen.getByRole('button', {name: 'Try again'})).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Try again'})).toHaveClass('retry-button');
+  expect(screen.queryByText("Tonight's run will find your highlights")).not.toBeInTheDocument();
+  expect(screen.queryByText('No kept quotes yet.')).not.toBeInTheDocument();
+
+  // Clicking "Try again" re-runs listQuotes
+  listQuotes.mockImplementation(async (_t, {status}) => status === 'pending' ? [] : []);
+  await userEvent.click(screen.getByRole('button', {name: 'Try again'}));
+  expect(await screen.findByText("Tonight's run will find your highlights")).toBeInTheDocument();
+  expect(screen.getByText('No kept quotes yet.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', {name: 'Try again'})).not.toBeInTheDocument();
+  expect(screen.queryByText('Your quotes could not load. Reload the page to try again.')).not.toBeInTheDocument();
+});
+
 test('only the action that is running is marked busy', async () => {
   pending = [quote()];
   updateQuote.mockReturnValue(new Promise(() => {}));
