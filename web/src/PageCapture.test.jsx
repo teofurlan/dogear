@@ -118,3 +118,26 @@ test('a 401 when fetching page list notifies onSessionExpired', async () => {
   render(<PageCapture getToken={getToken} bookId={id} onSessionExpired={onSessionExpired} />);
   await waitFor(() => expect(onSessionExpired).toHaveBeenCalledTimes(1));
 });
+
+test('shows Uploading N of M progress summary and fires onUploadingChange', async () => {
+  let releaseA, releaseB;
+  uploadPage
+    .mockImplementationOnce(() => new Promise(resolve => { releaseA = () => resolve({id: 'p1'}); }))
+    .mockImplementationOnce(() => new Promise(resolve => { releaseB = () => resolve({id: 'p2'}); }));
+  const onUploadingChange = vi.fn();
+  listPages.mockResolvedValueOnce([]).mockResolvedValue([{status: 'pending'}, {status: 'pending'}]);
+
+  render(<PageCapture getToken={getToken} bookId={id} onUploadingChange={onUploadingChange} />);
+  await userEvent.upload(screen.getByLabelText(/Photograph a page/), [file('a.jpg'), file('b.jpg')]);
+
+  expect(onUploadingChange).toHaveBeenCalledWith(true);
+  expect(await screen.findByText('Uploading 1 of 2…')).toBeInTheDocument();
+
+  releaseA();
+  expect(await screen.findByText('Uploading 2 of 2…')).toBeInTheDocument();
+
+  releaseB();
+  await waitFor(() => expect(screen.queryByText(/Uploading/)).not.toBeInTheDocument());
+  expect(onUploadingChange).toHaveBeenLastCalledWith(false);
+  expect(await screen.findByText("2 pages waiting for tonight's run")).toBeInTheDocument();
+});

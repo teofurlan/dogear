@@ -40,5 +40,9 @@
 .book-link { display: block; color: inherit; text-decoration: none; }
 .book-link:focus-visible { outline: 3px solid var(--catalog-red); outline-offset: 4px; }
 .book-link:hover .book-title { text-decoration: underline; text-underline-offset: .2em; }
+.upload-progress-summary { margin: .5rem 0 .75rem; font-weight: 600; color: var(--catalog-ink); }
+.leave-confirm-dialog { margin: 1rem 0; padding: .75rem 1rem; border: 1px solid var(--catalog-ink); border-left: 6px solid var(--catalog-red); background: var(--catalog-paper); }
+.leave-confirm-dialog p { margin: 0 0 .75rem; font-weight: 600; }
+.leave-confirm-actions { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
 @media (min-width: 40rem) { .book-view-head { grid-template-columns: 8rem 1fr; gap: 1.5rem; } }
 @media (prefers-reduced-motion: reduce) { .book-view *, .book-link { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }

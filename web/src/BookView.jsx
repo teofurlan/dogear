@@ -11,8 +11,29 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
   const heading = useRef(null);
   const [localCover, setLocalCover] = useState(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const onSessionExpired = useCallback(() => setSessionExpired(true), []);
   useEffect(() => {heading.current?.focus();}, []);
+
+  useEffect(() => {
+    if (!uploading) return undefined;
+    const handleBeforeUnload = event => {
+      event.preventDefault();
+      event.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [uploading]);
+
+  function handleBack() {
+    if (uploading) {
+      setConfirmLeave(true);
+    } else {
+      onBack();
+    }
+  }
 
   async function signIn() {
     try {
@@ -39,7 +60,14 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
   const isPending = coverUrl === undefined && localCover === null && Boolean(book?.has_cover_photo);
 
   return <article className="book-view">
-    <button type="button" className="back-button" onClick={onBack}>Back to library</button>
+    <button type="button" className="back-button" onClick={handleBack}>Back to library</button>
+    {confirmLeave ? <div className="leave-confirm-dialog" role="dialog" aria-label="Confirm leaving book" aria-modal="true">
+      <p>Photos are still uploading. If you leave now, the remaining uploads will stop.</p>
+      <div className="leave-confirm-actions">
+        <button type="button" className="primary" onClick={onBack}>Leave anyway</button>
+        <button type="button" className="quiet" onClick={() => setConfirmLeave(false)}>Stay on book</button>
+      </div>
+    </div> : null}
     {sessionExpired ? <section className="feedback" role="status">
       <p>Your session ended. Sign in again to continue.</p>
       <button type="button" className="retry-button" onClick={signIn}>Sign in again</button>
@@ -51,7 +79,7 @@ export default function BookView({book, coverUrl, getToken, onBack}) {
         <p className="book-author">{book.author || 'Author not provided'}</p>
       </div>
     </header>
-    <PageCapture getToken={getToken} bookId={book.id} onSessionExpired={onSessionExpired} />
+    <PageCapture getToken={getToken} bookId={book.id} onSessionExpired={onSessionExpired} onUploadingChange={setUploading} />
     <QuoteReview getToken={getToken} bookId={book.id} onSessionExpired={onSessionExpired} />
   </article>;
 }
