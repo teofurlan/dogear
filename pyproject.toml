@@ -21,6 +21,11 @@ dependencies = [
 dogear-extract = "dogear.entrypoints.extract_cli:main"
 dogear-night = "dogear.entrypoints.night_cli:main"
 
+[project.optional-dependencies]
+observability = [
+    "sentry-sdk>=2.72,<3",
+]
+
 [dependency-groups]
 dev = [
     "httpx2>=2.16.0",
