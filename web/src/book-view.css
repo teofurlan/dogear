@@ -30,7 +30,7 @@
 .book-view textarea { display: block; width: 100%; min-height: 6rem; padding: .65rem; border: 1px solid var(--catalog-rule); border-radius: 0; background: var(--catalog-paper); color: var(--catalog-ink); font: inherit; caret-color: var(--catalog-red); resize: vertical; }
 .quote-actions { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-top: .75rem; }
 .quote-error { color: var(--catalog-red); font-weight: 600; }
-.quote-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin: 1rem 0; padding: .75rem 1rem; border: 1px solid var(--catalog-ink); border-left: 6px solid var(--catalog-red); }
+.quote-undo { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); width: min(calc(100vw - 2 * var(--catalog-gutter)), 44rem); box-sizing: border-box; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; padding: .75rem 1rem; background: var(--catalog-paper); border: 1px solid var(--catalog-ink); border-left: 6px solid var(--catalog-red); }
 .quote-undo span { font-weight: 600; }
 .add-passage { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--catalog-rule); }
 .add-passage button { margin-top: .75rem; }

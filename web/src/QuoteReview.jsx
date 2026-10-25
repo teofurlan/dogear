@@ -2,10 +2,12 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {addQuote, deleteQuote, fetchCrop, listQuotes, updateQuote} from './quotes.js';
 
 const SAVE_FAILED = 'The change could not be saved. Your text is still here; try again.';
+const DELETE_FAILED = 'The quote could not be deleted. It is back in the list; try again.';
 const UNDO_TIMEOUT = 5000;
 
 function restoreAt(list, item, index) {
   if (!list) return [item];
+  if (list.some(q => q.id === item.id)) return list;
   const next = [...list];
   const target = index >= 0 && index <= next.length ? index : next.length;
   next.splice(target, 0, item);
@@ -89,20 +91,35 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
   const [undo, setUndo] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
   const pendingDelete = useRef(null);
+  const mounted = useRef(true);
   const getTokenRef = useRef(getToken);
   useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+  const bookIdRef = useRef(bookId);
+  useEffect(() => { bookIdRef.current = bookId; }, [bookId]);
+
+  const performDelete = useCallback(target => {
+    deleteQuote(getTokenRef.current, target.quote.id).catch(() => {
+      if (!mounted.current || target.bookId !== bookIdRef.current) return;
+      if (target.isPending) setPending(items => restoreAt(items, target.quote, target.index));
+      else setKept(items => restoreAt(items, target.quote, target.index));
+      setDeleteError(DELETE_FAILED);
+    });
+  }, []);
 
   const flushDelete = useCallback(() => {
     if (!pendingDelete.current) return;
-    const {quote, timerId} = pendingDelete.current;
-    clearTimeout(timerId);
+    const target = pendingDelete.current;
+    clearTimeout(target.timerId);
     pendingDelete.current = null;
-    deleteQuote(getTokenRef.current, quote.id).catch(() => {});
-  }, []);
+    performDelete(target);
+  }, [performDelete]);
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       if (pendingDelete.current) {
         clearTimeout(pendingDelete.current.timerId);
         deleteQuote(getTokenRef.current, pendingDelete.current.quote.id).catch(() => {});
@@ -114,6 +131,7 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
   useEffect(() => {
     flushDelete();
     setUndo(null);
+    setDeleteError('');
     const controller = new AbortController();
     setPending(null); setKept(null); setLoadError(false);
     Promise.all([
@@ -128,6 +146,7 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
 
   const drop = useCallback(quote => {
     flushDelete();
+    setDeleteError('');
     const isPending = quote.status === 'pending' || Boolean(pending?.some(q => q.id === quote.id));
     const list = isPending ? pending : kept;
     const index = list ? list.findIndex(q => q.id === quote.id) : 0;
@@ -135,14 +154,15 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
     else setKept(items => items ? items.filter(q => q.id !== quote.id) : []);
     const timerId = setTimeout(() => {
       if (pendingDelete.current?.quote.id === quote.id) {
+        const target = pendingDelete.current;
         pendingDelete.current = null;
-        deleteQuote(getTokenRef.current, quote.id).catch(() => {});
         setUndo(null);
+        performDelete(target);
       }
     }, undoTimeout);
-    pendingDelete.current = {quote, isPending, index, timerId};
+    pendingDelete.current = {quote, isPending, index, timerId, bookId: bookIdRef.current};
     setUndo({quote, isPending, index});
-  }, [flushDelete, pending, kept, undoTimeout]);
+  }, [flushDelete, performDelete, pending, kept, undoTimeout]);
 
   const restore = useCallback(() => {
     if (!pendingDelete.current) return;
@@ -171,9 +191,7 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
   const loading = pending === null || kept === null;
   return <section className="quote-review" aria-labelledby="review-title">
     <h2 id="review-title">Morning review</h2>
-    {undo ? <div className="quote-undo" role="status" aria-live="polite">
-      <span>Quote deleted.</span> <button type="button" className="quiet" onClick={restore}>Undo</button>
-    </div> : null}
+    {deleteError ? <p role="alert" className="quote-error">{deleteError}</p> : null}
     {loadError ? <p role="alert" className="quote-error">Your quotes could not load. Reload the page to try again.</p> : null}
     {loading ? <p role="status" className="feedback">Loading quotes…</p> : <>
       {pending.length ? <ul className="quote-list" aria-label="Quotes to review">{pending.map(quote => <PendingQuote key={quote.id} getToken={getToken} quote={quote} onKept={keep} onDeleted={drop} />)}</ul>
@@ -188,5 +206,8 @@ export default function QuoteReview({getToken, bookId, undoTimeout = UNDO_TIMEOU
       {addError ? <p role="alert" className="quote-error">{addError}</p> : null}
       <button type="submit" className="primary" disabled={adding || !draft.trim()}>Add passage</button>
     </form>
+    {undo ? <div className="quote-undo" role="status" aria-live="polite">
+      <span>Quote deleted.</span> <button type="button" className="quiet" onClick={restore}>Undo</button>
+    </div> : null}
   </section>;
 }

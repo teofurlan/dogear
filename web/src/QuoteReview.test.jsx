@@ -127,6 +127,49 @@ test('deleting another quote flushes the previous pending delete immediately', a
   expect(screen.queryByDisplayValue('Quote 1')).not.toBeInTheDocument();
 });
 
+test('failed delayed delete restores the pending quote and displays an alert', async () => {
+  pending = [quote({id: 'q1', text: 'Preserved text'}), quote({id: 'q2', text: 'Second quote'})];
+  deleteQuote.mockRejectedValueOnce(new Error('Network error'));
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={25} />);
+  const deleteButtons = await screen.findAllByRole('button', {name: 'Delete'});
+  await userEvent.click(deleteButtons[0]);
+  expect(screen.queryByDisplayValue('Preserved text')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/The quote could not be deleted\. It is back in the list; try again\./i));
+  const textareas = screen.getAllByLabelText('Quote text');
+  expect(textareas).toHaveLength(2);
+  expect(textareas[0]).toHaveValue('Preserved text');
+  expect(textareas[1]).toHaveValue('Second quote');
+});
+
+test('failed flush delete restores the previous quote and displays an alert', async () => {
+  pending = [quote({id: 'q1', text: 'First'}), quote({id: 'q2', text: 'Second'})];
+  deleteQuote.mockRejectedValueOnce(new Error('Delete failed'));
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={5000} />);
+  const deleteButtons = await screen.findAllByRole('button', {name: 'Delete'});
+  await userEvent.click(deleteButtons[0]);
+  expect(screen.queryByDisplayValue('First')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', {name: 'Delete'}));
+  expect(deleteQuote).toHaveBeenCalledWith(getToken, 'q1');
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/The quote could not be deleted\. It is back in the list; try again\./i));
+  expect(screen.getByDisplayValue('First')).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Undo'})).toBeInTheDocument();
+});
+
+test('failed delete of kept quote restores it in place', async () => {
+  kept = [quote({id: 'k1', status: 'kept', text: 'Kept 1'}), quote({id: 'k2', status: 'kept', text: 'Kept 2'})];
+  deleteQuote.mockRejectedValueOnce(new Error('500 Internal Error'));
+  render(<QuoteReview getToken={getToken} bookId={id} undoTimeout={25} />);
+  await screen.findByText('Kept 1');
+  const deleteButtons = screen.getAllByRole('button', {name: 'Delete quote'});
+  await userEvent.click(deleteButtons[1]);
+  expect(screen.queryByText('Kept 2')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/The quote could not be deleted\. It is back in the list; try again\./i));
+  const blockquotes = screen.getAllByRole('list', {name: 'Kept quotes'})[0].querySelectorAll('blockquote');
+  expect(blockquotes).toHaveLength(2);
+  expect(blockquotes[0]).toHaveTextContent('Kept 1');
+  expect(blockquotes[1]).toHaveTextContent('Kept 2');
+});
+
 test('a passage typed by hand is added as a kept quote', async () => {
   addQuote.mockResolvedValue(quote({id: 'q9', status: 'kept', text: 'Typed passage', page_id: null}));
   render(<QuoteReview getToken={getToken} bookId={id} />);
