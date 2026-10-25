@@ -111,3 +111,45 @@ def test_storage_failures_log_their_code_but_not_the_message(env, caplog):
     with pytest.raises(PhotosUnavailable):
         store.put("k", b"x")
     assert "AccessDenied" in caplog.text and "private" not in caplog.text
+
+
+class ProbingS3(FakeS3):
+    def __init__(self, head=None, listing=None):
+        super().__init__()
+        self.head, self.listing = head, listing
+
+    def head_bucket(self, Bucket):
+        self.calls.append(("head", Bucket))
+        if self.head:
+            raise self.head
+
+    def list_objects_v2(self, Bucket, MaxKeys):
+        self.calls.append(("list", Bucket, MaxKeys))
+        if self.listing:
+            raise self.listing
+        return {"KeyCount": 0}
+
+
+def denied(code="AccessDenied"):
+    return ClientError({"Error": {"Code": code, "Message": "private"}}, "Op")
+
+
+def test_a_denied_write_probes_bucket_access_once_and_logs_the_answers(env, caplog):
+    client = ProbingS3(head=None, listing=None)
+    client.error = denied()
+    store = R2Photos(R2Config.from_environment(), client=client)
+    for _ in range(2):
+        with pytest.raises(PhotosUnavailable):
+            store.put("k", b"x")
+    assert [c[0] for c in client.calls].count("head") == 1
+    assert "R2 diagnosis: head_bucket=ok list_objects=ok put_object=AccessDenied" in caplog.text
+    assert "private" not in caplog.text
+
+
+def test_the_probe_reports_why_the_bucket_is_unreachable(env, caplog):
+    client = ProbingS3(head=denied("403"), listing=denied("AccessDenied"))
+    client.error = denied()
+    store = R2Photos(R2Config.from_environment(), client=client)
+    with pytest.raises(PhotosUnavailable):
+        store.put("k", b"x")
+    assert "head_bucket=403 list_objects=AccessDenied" in caplog.text
