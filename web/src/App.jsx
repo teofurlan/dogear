@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useAuth0} from '@auth0/auth0-react';
-import {listBooks, PAGE_SIZE} from './books.js';
+import {getBook, listBooks, PAGE_SIZE} from './books.js';
 import {loadCovers} from './covers.js';
 import {chooseExampleBooks} from './example-books.js';
 import BookEntry from './BookEntry.jsx';
@@ -28,18 +28,30 @@ const readHash = () => /^#book=([a-f0-9]{24})$/i.exec(window.location.hash)?.[1]
 
 function Library({getToken, signIn}) {
   const [bookId, setBookId] = useState(readHash);
+  const [extraBooks, setExtraBooks] = useState({});
+  const [notFoundId, setNotFoundId] = useState(null);
+  const [bookError, setBookError] = useState(null);
+  const [loadingBookId, setLoadingBookId] = useState(null);
   const [waiting, setWaiting] = useState([]);
   const pushed = useRef(false);
   const heading = useRef(null);
   useEffect(() => {
-    const sync = () => setBookId(readHash());
+    const sync = () => {
+      setNotFoundId(null);
+      setBookError(null);
+      setBookId(readHash());
+    };
     window.addEventListener('popstate', sync); window.addEventListener('hashchange', sync);
     return () => {window.removeEventListener('popstate', sync); window.removeEventListener('hashchange', sync);};
   }, []);
   function openBook(id) {
+    setNotFoundId(null);
+    setBookError(null);
     window.history.pushState(null, '', '#book=' + id); pushed.current = true; setBookId(id);
   }
   function closeBook() {
+    setNotFoundId(null);
+    setBookError(null);
     if (pushed.current) {pushed.current = false; window.history.back();}
     else {window.history.replaceState(null, '', window.location.pathname + window.location.search); setBookId(null);}
   }
@@ -124,8 +136,44 @@ function Library({getToken, signIn}) {
     } finally {if (!controller.signal.aborted) busy.current = false;}
   }
 
-  const openBookData = bookId ? visibleBooks.find(item => item.id === bookId) || {id: bookId, title: 'This book', author: null} : null;
-  if (bookId && status === 'loading') return <p role="status" className="feedback">Loading your library…</p>;
+  useEffect(() => {
+    if (!bookId) return undefined;
+    if (visibleBooks.some(item => item.id === bookId) || extraBooks[bookId] || notFoundId === bookId || bookError === bookId) return undefined;
+    if (status === 'loading') return undefined;
+    const controller = new AbortController();
+    setLoadingBookId(bookId);
+    getBook(getToken, bookId, {signal: controller.signal})
+      .then(book => {
+        if (!controller.signal.aborted) {
+          setExtraBooks(previous => ({...previous, [book.id]: book}));
+          setLoadingBookId(null);
+        }
+      })
+      .catch(problem => {
+        if (!controller.signal.aborted) {
+          setLoadingBookId(null);
+          if (problem?.status === 404) setNotFoundId(bookId);
+          else setBookError(bookId);
+        }
+      });
+    return () => controller.abort();
+  }, [bookId, visibleBooks, extraBooks, notFoundId, bookError, status, getToken]);
+
+  const openBookData = bookId ? (visibleBooks.find(item => item.id === bookId) || extraBooks[bookId] || null) : null;
+  if (bookId && (status === 'loading' || loadingBookId === bookId)) return <p role="status" className="feedback">{status === 'loading' ? 'Loading your library…' : 'Loading book…'}</p>;
+  if (bookId && notFoundId === bookId) {
+    return <section className="feedback" role="status">
+      <p>This book is not in your library.</p>
+      <button type="button" className="back-button" onClick={closeBook}>Back to library</button>
+    </section>;
+  }
+  if (bookId && bookError === bookId) {
+    return <section className="feedback" role="status">
+      <p>This book could not load. Your books have not changed.</p>
+      <button type="button" className="retry-button" onClick={() => setBookError(null)}>Try again</button>
+      <div><button type="button" className="back-button" onClick={closeBook}>Back to library</button></div>
+    </section>;
+  }
   if (openBookData) return <BookView key={bookId} book={openBookData} coverUrl={covers[bookId]} getToken={getToken} onBack={closeBook} />;
   const waitingBook = waiting.length ? visibleBooks.find(item => item.id === waiting[0].book_id) : null;
 

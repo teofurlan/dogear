@@ -57,3 +57,8 @@ test('disabled buttons use not-allowed cursor by default and wait cursor only wh
 test('book titles request the bundled display weight rather than an unavailable face', () => {
   expect(rule('.book-grid .book-title').getPropertyValue('font-weight')).toBe('700');
 });
+
+test('back button has underline and pointer cursor', () => {
+  expect(rule('.back-button').getPropertyValue('text-decoration')).toMatch(/underline/);
+  expect(rule('.back-button').getPropertyValue('cursor')).toBe('pointer');
+});

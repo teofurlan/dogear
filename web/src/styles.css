@@ -373,6 +373,18 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.back-button {
+  border: 0;
+  background: transparent;
+  color: var(--catalog-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+  padding: 0;
+  cursor: pointer;
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+
 .catalog-footer {
   display: flex;
   flex-wrap: wrap;

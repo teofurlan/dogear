@@ -73,6 +73,13 @@ def mongo(monkeypatch):
 
             return Cursor([row for row in state.rows if matches(row)])
 
+        def find_one(self, query):
+            self.check()
+            for row in state.rows:
+                if all(row.get(key) == value for key, value in query.items()):
+                    return deepcopy(row)
+            return None
+
     class Client:
         def __init__(self, *args, **kwargs):
             time.sleep(state.connect_delay)
@@ -252,3 +259,54 @@ def test_concurrent_first_book_requests_share_one_client(mongo, auth):
         response.status_code == 200 and response.json() == [] for response in responses
     )
     assert len(mongo.clients) == 1
+
+
+def test_reader_can_get_book_by_id_and_sees_full_payload(mongo, auth):
+    client, issue, _, _ = auth
+    alice, bob = headers(issue, "auth0|alice"), headers(issue, "auth0|bob")
+    created = client.post(
+        "/books", headers=alice, json={"title": "Single book", "author": "Ada"}
+    ).json()
+    response = client.get(f"/books/{created['id']}", headers=alice)
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": created["id"],
+        "title": "Single book",
+        "author": "Ada",
+        "has_cover_photo": False,
+    }
+
+
+def test_get_book_returns_404_for_other_owner_or_missing_or_invalid_id(mongo, auth):
+    client, issue, _, _ = auth
+    alice, bob = headers(issue, "auth0|alice"), headers(issue, "auth0|bob")
+    created = client.post(
+        "/books", headers=alice, json={"title": "Private book"}
+    ).json()
+
+    # Other owner returns 404 with generic detail
+    other_owner_res = client.get(f"/books/{created['id']}", headers=bob)
+    assert other_owner_res.status_code == 404
+    assert other_owner_res.json() == {"detail": "Book not found"}
+
+    # Non-existent id returns 404 with generic detail
+    missing_res = client.get(f"/books/{ObjectId()}", headers=alice)
+    assert missing_res.status_code == 404
+    assert missing_res.json() == {"detail": "Book not found"}
+
+    # Invalid id format returns 404 with generic detail
+    invalid_res = client.get("/books/not-an-object-id", headers=alice)
+    assert invalid_res.status_code == 404
+    assert invalid_res.json() == {"detail": "Book not found"}
+
+
+def test_get_book_fails_closed_when_storage_unavailable(mongo, auth):
+    client, issue, _, _ = auth
+    owner = headers(issue, "auth0|alice")
+    created = client.post("/books", headers=owner, json={"title": "Book"}).json()
+    mongo.unavailable = True
+    response = client.get(f"/books/{created['id']}", headers=owner)
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Book storage unavailable"}
+    mongo.unavailable = False
+

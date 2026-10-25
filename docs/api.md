@@ -36,6 +36,7 @@ an Auth0 **API access token** (not an ID token).
 |---|---|---|
 | `POST /books` | `{"title":"A quiet morning","author":"Ada Reed"}` | `201`, with `id`, `title`, `author` |
 | `GET /books` | Optional `limit` and `after` query parameters | `200`, an array containing only your books |
+| `GET /books/{book_id}` | | `200`, the book payload (including `has_cover_photo`); `404` when nonexistent or owned by another reader |
 | `POST /books/identify` | Raw `image/jpeg` or `image/png` cover photo | `200`, `{"title":"...","author":null,"text":"..."}`; creates nothing |
 | `PUT /books/{book_id}/cover` | Raw `image/jpeg` or `image/png` cover photo | `200`, the book with `has_cover_photo: true`; `404` for an unknown or other-owner book; `503` when storage is unavailable |
 | `GET /books/{book_id}/cover` | | `image/jpeg` with `Cache-Control: private, no-store`; `404` without a stored photo |

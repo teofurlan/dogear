@@ -26,6 +26,9 @@ export async function listBooks(getToken, {after, signal} = {}) {
   return books;
 }
 
+export const getBook = (getToken, bookId, {signal} = {}) =>
+  api(getToken, `/books/${bookId}`, {signal});
+
 export const fetchCover = (getToken, bookId, {signal} = {}) =>
   api(getToken, `/books/${bookId}/cover`, {as: 'blob', signal});
 

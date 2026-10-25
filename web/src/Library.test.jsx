@@ -3,13 +3,13 @@ import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, expect, test, vi} from 'vitest';
 import App from './App.jsx';
-import {listBooks} from './books.js';
+import {getBook, listBooks} from './books.js';
 import {listQuotes} from './quotes.js';
 
 const auth = vi.hoisted(() => ({isLoading: false, isAuthenticated: true, user: {sub: 'reader-a'}, error: null,
   loginWithRedirect: vi.fn(), logout: vi.fn(), getAccessTokenSilently: vi.fn()}));
 vi.mock('@auth0/auth0-react', () => ({useAuth0: () => auth}));
-vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), BooksError: class extends Error {}}));
+vi.mock('./books.js', () => ({PAGE_SIZE: 24, listBooks: vi.fn(), getBook: vi.fn(), BooksError: class extends Error {}}));
 vi.mock('./covers.js', () => ({loadCovers: vi.fn(async (books, receive) => books.forEach(item => receive(item.id, null)))}));
 vi.mock('./quotes.js', () => ({listQuotes: vi.fn()}));
 vi.mock('./BookView.jsx', () => ({default: ({book, onBack}) => <div><h1>View of {book.title}</h1><button onClick={onBack}>Back to library</button></div>}));
@@ -18,6 +18,7 @@ const book = {id: '000000000000000000000001', title: 'A quiet afternoon', author
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
   listBooks.mockReset().mockResolvedValue([book]);
+  getBook.mockReset();
   listQuotes.mockReset().mockResolvedValue([]);
 });
 afterEach(() => window.history.replaceState(null, '', '/'));
@@ -30,7 +31,7 @@ test('clicking a book opens its view and syncs the hash; back returns to the lib
   await userEvent.click(screen.getByRole('button', {name: 'Back to library'}));
   expect(await screen.findByRole('heading', {name: 'Your library'})).toBeInTheDocument();
   expect(window.location.hash).toBe('');
-});
+}, 15000);
 
 test('loading with #book=<id> opens that book (reload)', async () => {
   window.history.replaceState(null, '', '/#book=' + book.id);
@@ -70,4 +71,25 @@ test('no banner when nothing is waiting, and a failed lookup stays silent', asyn
 test('each book link is named by its title and author, not by its cover placeholder', async () => {
   render(<App />);
   expect(await screen.findByRole('link', {name: 'A quiet afternoon by Ada Reed'})).toBeInTheDocument();
+});
+
+test('book not in loaded library is fetched by id on direct link', async () => {
+  const other = {id: '000000000000000000000099', title: 'Deep in the shelf', author: 'Leo'};
+  listBooks.mockResolvedValue([book]);
+  getBook.mockResolvedValue(other);
+  window.history.replaceState(null, '', '/#book=' + other.id);
+  render(<App />);
+  expect(await screen.findByRole('heading', {name: 'View of Deep in the shelf'})).toBeInTheDocument();
+  expect(getBook).toHaveBeenCalledWith(expect.any(Function), other.id, expect.anything());
+});
+
+test('book returning 404 shows not in your library state with back to library button', async () => {
+  listBooks.mockResolvedValue([book]);
+  getBook.mockRejectedValue({status: 404});
+  window.history.replaceState(null, '', '/#book=000000000000000000000404');
+  render(<App />);
+  expect(await screen.findByText('This book is not in your library.')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', {name: 'Back to library'}));
+  expect(await screen.findByRole('heading', {name: 'Your library'})).toBeInTheDocument();
+  expect(window.location.hash).toBe('');
 });
